@@ -1,8 +1,8 @@
-use super::component::Component;
+use super::{component::Component, connectable::Connectable};
 
-/// Сущность Эмиттер способная испускать результирующий сигнал, который принимают подключенные
-/// акцепторы.
-pub trait Emitter: Component {
-  /// Sending signal to all consumers
+/// The Emitter is able to emit a signal, which is then received
+/// by the connected Acceptors.
+pub trait Emitter: Component + Connectable {
+  /// Sending a signal to all connected devices.
   fn emit(&self, signal: u8);
 }

@@ -3,6 +3,4 @@
 //!
 //!
 
-// pub use rnn::synapse::Synapse;
-
 pub mod rnn;

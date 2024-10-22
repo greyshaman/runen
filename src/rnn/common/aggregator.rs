@@ -1,11 +1,14 @@
-use super::component::Component;
+use super::{component::Component, connectable::Connectable};
 
-/// сущность способная образовать связь с эмиттером, преобразовать несколько принятых
-/// сигналов в один результирующий и передать его эмиттеру
-pub trait Aggregator: Component {
-  /// оповещающий сигнал может иметь как положительное(возбуждающий сигнал)
-  /// так и отрицательный (тормозящий сигнал)
+/// An entity that is able to establish a connection with
+/// an emitter and convert multiple received signals into
+/// a single output signal, which it then sends to the emitter.
+pub trait Aggregator: Component + Connectable {
+  /// The incoming signal can be both positive (exciting)
+  /// and negative (braking). It is processed and the results
+  /// are accumulated.
   fn notify(&mut self, collector_id: &str, signal: i16);
 
-  fn aggregate(&self, signal: u8);
+  /// The signal is sent to the emitter.
+  fn kick(&self, signal: u8);
 }

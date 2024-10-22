@@ -2,9 +2,10 @@ use std::error::Error;
 
 use regex::Regex;
 
-use super::{rnn_error::RnnError, spec_type::SpecificationType};
+use super::{group_type::GroupType, rnn_error::RnnError, spec_type::SpecificationType};
 
-pub fn gen_id(container_id: &str, entity_id: usize, my_spec_type: SpecificationType) -> String {
+/// Function generate id in format "Z123A2" based on container Id and provided available Id
+pub fn gen_id_by_spec_type(container_id: &str, entity_num_id: usize, my_spec_type: &SpecificationType) -> String {
   let specification_prefix =
     match my_spec_type {
       SpecificationType::Acceptor => 'A',
@@ -12,16 +13,23 @@ pub fn gen_id(container_id: &str, entity_id: usize, my_spec_type: SpecificationT
       SpecificationType::Aggregator => 'G',
       SpecificationType::Emitter => 'E',
       SpecificationType::Media => 'M',
-      SpecificationType::Composer => 'Z',
-      _ => 'N',
+      SpecificationType::Container => 'Z',
+      _ => 'U',
     };
 
-  let mut id = String::from(container_id);
-  id.push(specification_prefix);
-  id.push_str(entity_id.to_string().as_str());
-  id
+  format!("{}{}{}", container_id, specification_prefix, entity_num_id)
 }
 
+pub fn gen_id_by_group_type(parent_id: &str, entry_num_id: usize, group_type: &GroupType) -> String {
+  let group_prefix = match group_type {
+    GroupType::Neural => 'Z',
+    GroupType::Cyber => 'Y',
+  };
+
+  format!("{}{}{}", parent_id, group_prefix, entry_num_id)
+}
+
+/// Extract number fraction of component Id
 pub fn get_component_id_fraction(id: &str, spec_type: &SpecificationType)
   -> Result<usize, Box<dyn Error>> {
   if id.len() == 0 { return Err(Box::new(RnnError::NotPresent(String::from("Empty string present")))) }
@@ -31,7 +39,7 @@ pub fn get_component_id_fraction(id: &str, spec_type: &SpecificationType)
     SpecificationType::Collector => r"Z\d+C(\d+)",
     SpecificationType::Aggregator => r"Z\d+G(\d+)",
     SpecificationType::Emitter => r"Z\d+E(\d+)",
-    SpecificationType::Composer => r"Z(\d+)",
+    SpecificationType::Container => r"Z(\d+)",
     _ => return Err(Box::new(RnnError::NotSupportedArgValue)),
   };
 
