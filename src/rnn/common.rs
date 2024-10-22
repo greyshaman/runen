@@ -1,4 +1,5 @@
 pub mod spec_type;
+pub mod group_type;
 
 pub mod acceptor;
 pub mod aggregator;
@@ -7,6 +8,7 @@ pub mod component;
 pub mod connectable;
 pub mod container;
 pub mod specialized;
+pub mod grouped;
 pub mod emitter;
 pub mod identity;
 pub mod media;

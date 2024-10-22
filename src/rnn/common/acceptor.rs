@@ -1,7 +1,7 @@
-use super::component::Component;
+use super::{component::Component, connectable::Connectable};
 
-/// Сущность способная принимать сигнал испущенный эмиттером
-pub trait Acceptor: Component {
-  /// Принимает сигнал для дальнейшей обработки и возможной передачи далее
+/// An entity that can receive a signal emitted from an emitter.
+pub trait Acceptor: Component + Connectable {
+  /// Receives the signal and processes it for further transmission.
   fn accept(&mut self, signal: u8);
 }
