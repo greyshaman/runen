@@ -1,6 +1,6 @@
 //! The Neuron is model of biological neuron cell within organelles
 
-use std::{rc::Weak, sync::atomic::AtomicUsize};
+use std::rc::Weak;
 use std::rc::Rc;
 use std::collections::BTreeMap;
 use std::cell::RefCell;
@@ -20,8 +20,6 @@ use super::axon::Axon;
 use super::dendrite::Dendrite;
 use super::neurosoma::Neurosoma;
 use super::synapse::Synapse;
-
-static mut ID_COUNTER: AtomicUsize = AtomicUsize::new(0_usize);
 
 #[derive(Debug)]
 pub struct Neuron {
