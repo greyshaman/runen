@@ -7,6 +7,7 @@ use std::cell::RefCell;
 
 use crate::rnn::common::group_type::GroupType;
 use crate::rnn::common::identity::Identity;
+use crate::rnn::common::receiver::Receiver;
 use crate::rnn::common::rnn_error::RnnError;
 use crate::rnn::common::specialized::Specialized;
 use crate::rnn::common::utils::gen_id_by_spec_type;
@@ -14,7 +15,6 @@ use crate::rnn::common::{grouped::Grouped, utils::get_component_id_fraction};
 use crate::rnn::common::spec_type::SpecificationType;
 use crate::rnn::common::media::Media;
 use crate::rnn::common::container::Container;
-use crate::rnn::common::component::Component;
 
 use super::axon::Axon;
 use super::dendrite::Dendrite;
@@ -25,7 +25,7 @@ use super::synapse::Synapse;
 pub struct Neuron {
   id: String,
   network: RefCell<Weak<RefCell<dyn Media>>>,
-  components: BTreeMap<String, Rc<RefCell<dyn Component>>>,
+  components: BTreeMap<String, Rc<RefCell<dyn Receiver>>>,
 }
 
 impl Neuron {
@@ -71,7 +71,7 @@ impl Neuron {
 }
 
 impl Container for Neuron {
-  fn create_acceptor(&mut self, max_capacity: Option<u8>, regeneration_amount: Option<u8>) {
+  fn create_acceptor(&mut self, max_capacity: Option<i16>, regeneration_amount: Option<i16>) {
     let acceptor_id = self.prepare_new_component_id(&SpecificationType::Acceptor);
 
     let synapse = Synapse::new(
@@ -84,7 +84,7 @@ impl Container for Neuron {
     self.components.insert(acceptor_id, Rc::new(RefCell::new(synapse)));
   }
 
-  fn create_collector(&mut self, weight: Option<i8>) {
+  fn create_collector(&mut self, weight: Option<i16>) {
       let collector_id = self.prepare_new_component_id(&SpecificationType::Collector);
 
       let collector = Dendrite::new(
@@ -118,7 +118,7 @@ impl Container for Neuron {
     self.components.insert(emitter_id, Rc::new(RefCell::new(emitter)));
   }
 
-  fn get_component(&self, id: &str) -> Option<&Rc<RefCell<dyn Component>>> {
+  fn get_component(&self, id: &str) -> Option<&Rc<RefCell<dyn Receiver>>> {
     self.components.get(id)
   }
 

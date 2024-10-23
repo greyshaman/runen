@@ -3,23 +3,21 @@ use std::collections::HashMap;
 use std::rc::Weak;
 use std::rc::Rc;
 
-use crate::rnn::common::acceptor::Acceptor;
-use crate::rnn::common::component::Component;
+use crate::rnn::common::receiver::Receiver;
+use crate::rnn::common::sender::Sender;
 use crate::rnn::common::specialized::Specialized;
 use crate::rnn::common::identity::Identity;
 use crate::rnn::common::spec_type::SpecificationType;
-use crate::rnn::common::emitter::Emitter;
 use crate::rnn::common::container::Container;
 use crate::rnn::common::connectable::Connectable;
 
-use super::synapse::Synapse;
-
-
+/// The Axon is able to emit a signal, which is then received
+/// by the connected Synapses.
 #[derive(Debug)]
 pub struct Axon {
   id: String,
   container: RefCell<Weak<RefCell<dyn Container>>>,
-  acceptors: RefCell<HashMap<String, Weak<RefCell<dyn Component>>>>,
+  acceptors: RefCell<HashMap<String, Weak<RefCell<dyn Receiver>>>>,
 }
 
 impl Axon {
@@ -32,23 +30,25 @@ impl Axon {
   }
 }
 
-impl Emitter for Axon {
-  fn emit(&self, signal: u8) {
+impl Receiver for Axon {
+  fn receive(&mut self, signal: i16, _: &str) {
+    self.send(signal);
+  }
+}
+
+impl Sender for Axon {
+  fn send(&self, signal: i16) {
     // FIXME use channels to improve signal sending
-    for (id, acceptor_weak) in self.acceptors.borrow_mut().iter() {
-      acceptor_weak.upgrade()
-        .map(|acceptor_rc| {
-          acceptor_rc.borrow_mut()
-          .as_mut_any()
-          .downcast_mut::<Synapse>()
-          .unwrap()
-          .accept(signal)
-        })
-        .or_else(|| {
-          self.acceptors.borrow_mut().remove(id);
-          Some(())
-        });
-    }
+  for (id, acceptor_weak) in self.acceptors.borrow_mut().iter() {
+    acceptor_weak.upgrade()
+      .map(|acceptor_rc| {
+        acceptor_rc.borrow_mut().receive(signal, self.get_id().as_str());
+      })
+      .or_else(|| {
+        self.acceptors.borrow_mut().remove(id);
+        Some(())
+      });
+  }
   }
 }
 
@@ -86,18 +86,24 @@ impl Specialized for Axon {
   }
 }
 
-impl Component for Axon {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
-}
-
 impl Identity for Axon {
   fn get_id(&self) -> String {
     self.id.clone()
   }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  struct MockAcceptor {
+    accepted_signal: u8,
+  }
+
+  #[test]
+  fn test1() {
+    let t = 1;
+    assert_eq!(t, 1);
+  }
+
 }

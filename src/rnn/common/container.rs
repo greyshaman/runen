@@ -4,9 +4,9 @@ use std::error::Error;
 use std::fmt::Debug;
 use std::rc::Rc;
 
-use super::component::Component;
 use super::grouped::Grouped;
 use super::identity::Identity;
+use super::receiver::Receiver;
 use super::specialized::Specialized;
 
 /// A substance that can contain different elements in its composition.
@@ -14,12 +14,12 @@ pub trait Container: Identity + Specialized + Grouped + Any + Debug {
   /// Create the acceptor component and save it in internal memory.
   fn create_acceptor(
     &mut self,
-    max_capacity: Option<u8>,
-    regeneration_amount: Option<u8>,
+    max_capacity: Option<i16>,
+    regeneration_amount: Option<i16>,
   );
 
   /// Create the collector component and save it in internal memory.
-  fn create_collector(&mut self, weight: Option<i8>);
+  fn create_collector(&mut self, weight: Option<i16>);
 
   /// Create the aggregator component and save it in internal memory.
   fn create_aggregator(&mut self);
@@ -28,7 +28,7 @@ pub trait Container: Identity + Specialized + Grouped + Any + Debug {
   fn create_emitter(&mut self);
 
   /// Returns the component based on its ID.
-  fn get_component(&self, id: &str) -> Option<&Rc<RefCell<dyn Component>>>;
+  fn get_component(&self, id: &str) -> Option<&Rc<RefCell<dyn Receiver>>>;
 
   /// Deleting a component by its ID
   fn remove_component(&mut self, id: &str) -> Result<(), Box<dyn Error>>;

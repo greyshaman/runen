@@ -3,16 +3,13 @@ use std::cmp::max;
 use std::rc::Weak;
 use std::{collections::HashSet, rc::Rc};
 
-use crate::rnn::common::emitter::Emitter;
 use crate::rnn::common::identity::Identity;
+use crate::rnn::common::receiver::Receiver;
+use crate::rnn::common::sender::Sender;
 use crate::rnn::common::specialized::Specialized;
 use crate::rnn::common::spec_type::SpecificationType;
 use crate::rnn::common::container::Container;
 use crate::rnn::common::connectable::Connectable;
-use crate::rnn::common::component::Component;
-use crate::rnn::common::aggregator::Aggregator;
-
-use super::axon::Axon;
 
 /// The neurosoma collects the signals received from
 /// the dendrites and sends the resulting signal down
@@ -29,7 +26,7 @@ pub struct Neurosoma {
   /// of these collectors.
 
   reported_collectors: HashSet<String>,
-  emitter: Option<Rc<RefCell<dyn Component>>>,
+  emitter: Option<Rc<RefCell<dyn Receiver>>>,
   accumulator: i16,
 }
 
@@ -59,35 +56,33 @@ impl Neurosoma {
   }
 }
 
-impl Aggregator for Neurosoma {
-    fn notify(&mut self, collector_id: &str, signal: i16) {
+impl Receiver for Neurosoma {
+    fn receive(&mut self, signal: i16, collector_id: &str) {
       if self.reported_collectors.contains(collector_id)
         || self.reported_collectors.len() >= self.count_referrals() - 1 {
-        let new_signal = max(self.accumulator as u8, 0_u8);
+        let new_signal = max(self.accumulator, 0);
 
         self.reported_collectors.clear();
 
         self.accumulator = signal + 1_i16;
         self.reported_collectors.insert(collector_id.to_owned());
 
-        self.kick(new_signal);
+        self.send(new_signal);
       } else {
         self.accumulator += signal;
         self.reported_collectors.insert(collector_id.to_owned());
       }
     }
+}
 
-    fn kick(&self, signal: u8) {
-      self.emitter
-        .as_ref()
-        .map(|emitter_rc| {
-          emitter_rc.borrow()
-            .as_any()
-            .downcast_ref::<Axon>()
-            .unwrap()
-            .emit(signal)
-        });
-    }
+impl Sender for Neurosoma {
+  fn send(&self, signal: i16) {
+    self.emitter
+      .as_ref()
+      .map(|emitter_rc| {
+        emitter_rc.borrow_mut().receive(signal, self.get_id().as_str());
+      });
+  }
 }
 
 impl Connectable for Neurosoma {
@@ -110,16 +105,6 @@ impl Specialized for Neurosoma {
   fn get_spec_type(&self) -> SpecificationType {
     SpecificationType::Aggregator
   }
-}
-
-impl Component for Neurosoma {
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
 }
 
 impl Identity for Neurosoma {
