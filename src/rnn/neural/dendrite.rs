@@ -3,6 +3,7 @@ use std::rc::{Rc, Weak};
 
 use crate::rnn::common::receiver::Receiver;
 use crate::rnn::common::sender::Sender;
+use crate::rnn::common::signal_msg::SignalMessage;
 use crate::rnn::common::specialized::Specialized;
 use crate::rnn::common::identity::Identity;
 use crate::rnn::common::spec_type::SpecificationType;
@@ -36,7 +37,8 @@ impl Dendrite {
 }
 
 impl Receiver for Dendrite {
-  fn receive(&mut self, signal: i16, _: &str) {
+  fn receive(&mut self, signal_msg: Box<SignalMessage>) {
+    let SignalMessage(signal, _) = *signal_msg;
     let new_signal = self.weight * signal;
 
     self.send(new_signal);
@@ -46,7 +48,9 @@ impl Receiver for Dendrite {
 impl Sender for Dendrite {
   fn send(&self, signal: i16) {
     self.aggregator.as_ref().map(|aggregator_rc|{
-      aggregator_rc.borrow_mut().receive(signal, self.get_id().as_str());
+      aggregator_rc.borrow_mut().receive(
+        Box::new(SignalMessage(signal, Box::new(self.get_id())))
+      );
     });
   }
 }

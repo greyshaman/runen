@@ -6,6 +6,7 @@ use crate::rnn::common::connectable::Connectable;
 use crate::rnn::common::container::Container;
 use crate::rnn::common::receiver::Receiver;
 use crate::rnn::common::sender::Sender;
+use crate::rnn::common::signal_msg::SignalMessage;
 use crate::rnn::common::specialized::Specialized;
 use crate::rnn::common::identity::Identity;
 use crate::rnn::common::spec_type::SpecificationType;
@@ -48,7 +49,8 @@ impl Synapse {
 }
 
 impl Receiver for Synapse {
-  fn receive(&mut self, signal: i16, _: &str) {
+  fn receive(&mut self, signal_msg: Box<SignalMessage>) {
+    let SignalMessage(signal, _) = *signal_msg;
     let new_signal = min(signal, self.current_capacity);
 
     self.current_capacity -= new_signal;
@@ -62,7 +64,9 @@ impl Receiver for Synapse {
 impl Sender for Synapse {
   fn send(&self, signal: i16) {
     self.collector.as_ref().map(|d| {
-      d.borrow_mut().receive(signal, self.get_id().as_str())
+      d.borrow_mut().receive(
+        Box::new(SignalMessage(signal, Box::new(self.get_id())))
+      )
     });
   }
 }

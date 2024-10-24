@@ -6,6 +6,7 @@ use std::{collections::HashSet, rc::Rc};
 use crate::rnn::common::identity::Identity;
 use crate::rnn::common::receiver::Receiver;
 use crate::rnn::common::sender::Sender;
+use crate::rnn::common::signal_msg::SignalMessage;
 use crate::rnn::common::specialized::Specialized;
 use crate::rnn::common::spec_type::SpecificationType;
 use crate::rnn::common::container::Container;
@@ -57,20 +58,22 @@ impl Neurosoma {
 }
 
 impl Receiver for Neurosoma {
-    fn receive(&mut self, signal: i16, collector_id: &str) {
-      if self.reported_collectors.contains(collector_id)
+    fn receive(&mut self, signal_msg: Box<SignalMessage>) {
+      let SignalMessage(signal, boxed_source_id) = *signal_msg;
+      let collector_id = *boxed_source_id;
+      if self.reported_collectors.contains(&collector_id)
         || self.reported_collectors.len() >= self.count_referrals() - 1 {
         let new_signal = max(self.accumulator, 0);
 
         self.reported_collectors.clear();
 
         self.accumulator = signal + 1_i16;
-        self.reported_collectors.insert(collector_id.to_owned());
+        self.reported_collectors.insert(collector_id);
 
         self.send(new_signal);
       } else {
         self.accumulator += signal;
-        self.reported_collectors.insert(collector_id.to_owned());
+        self.reported_collectors.insert(collector_id);
       }
     }
 }
@@ -80,7 +83,9 @@ impl Sender for Neurosoma {
     self.emitter
       .as_ref()
       .map(|emitter_rc| {
-        emitter_rc.borrow_mut().receive(signal, self.get_id().as_str());
+        emitter_rc.borrow_mut().receive(
+          Box::new(SignalMessage(signal, Box::new(self.get_id())))
+        );
       });
   }
 }

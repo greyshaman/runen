@@ -5,6 +5,7 @@ use std::rc::Rc;
 
 use crate::rnn::common::receiver::Receiver;
 use crate::rnn::common::sender::Sender;
+use crate::rnn::common::signal_msg::SignalMessage;
 use crate::rnn::common::specialized::Specialized;
 use crate::rnn::common::identity::Identity;
 use crate::rnn::common::spec_type::SpecificationType;
@@ -31,7 +32,8 @@ impl Axon {
 }
 
 impl Receiver for Axon {
-  fn receive(&mut self, signal: i16, _: &str) {
+  fn receive(&mut self, signal_msg: Box<SignalMessage>) {
+    let SignalMessage(signal, _) = *signal_msg;
     self.send(signal);
   }
 }
@@ -42,7 +44,9 @@ impl Sender for Axon {
   for (id, acceptor_weak) in self.acceptors.borrow_mut().iter() {
     acceptor_weak.upgrade()
       .map(|acceptor_rc| {
-        acceptor_rc.borrow_mut().receive(signal, self.get_id().as_str());
+        acceptor_rc.borrow_mut().receive(
+          Box::new(SignalMessage(signal, Box::new(self.get_id())))
+        );
       })
       .or_else(|| {
         self.acceptors.borrow_mut().remove(id);
