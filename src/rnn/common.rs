@@ -10,6 +10,8 @@ pub mod media;
 pub mod sender;
 pub mod receiver;
 
+pub mod signal_msg;
+
 pub mod signal_input;
 pub mod signal_output;
 

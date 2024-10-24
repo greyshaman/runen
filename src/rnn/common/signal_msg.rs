@@ -1,0 +1,1 @@
+pub struct SignalMessage(i16, Box<String>);
