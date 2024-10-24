@@ -105,6 +105,10 @@ impl Media for Network {
     self.containers.contains_key(id)
   }
 
+  fn len(&self) -> usize {
+    self.containers.len()
+  }
+
   fn as_any(&self) -> &dyn std::any::Any {
       self
   }
@@ -129,5 +133,83 @@ impl Specialized for Network {
 impl fmt::Display for Network {
   fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
       write!(f, "The Network {} ", self.id)
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  #[test]
+  fn can_create_two_unique_networks() {
+    let n1 = Network::new();
+    let n2 = Network::new();
+
+    assert_ne!(n1.id, n2.id);
+  }
+
+  #[test]
+  fn can_create_two_neurons() {
+    let net: Rc<RefCell<dyn Media>> = Rc::new(RefCell::new(Network::new()));
+
+    for _ in 0..=1 {
+      net.borrow_mut().create_container(&GroupType::Neural, &net).is_ok();
+    }
+
+    assert_eq!(net.borrow().len(), 2);
+  }
+
+  #[test]
+  fn network_can_get_container_after_create() {
+    let net: Rc<RefCell<dyn Media>> = Rc::new(RefCell::new(Network::new()));
+
+    let neuron_id = net.borrow_mut().create_container(&GroupType::Neural, &net).unwrap();
+
+    assert_eq!(net.borrow().len(), 1);
+    assert!(net.borrow().get_container(neuron_id.as_str()).is_some(), "Container not found");
+    assert!(net.borrow().get_container("missed").is_none(), "Should be nothing");
+  }
+
+  #[test]
+  fn network_can_remove_container_after_create() {
+    let net: Rc<RefCell<dyn Media>> = Rc::new(RefCell::new(Network::new()));
+
+    let neuron_id = net.borrow_mut().create_container(&GroupType::Neural, &net).unwrap();
+    assert_eq!(net.borrow().len(), 1);
+
+    net.borrow_mut().remove_container(&neuron_id);
+    assert_eq!(net.borrow().len(), 0);
+  }
+
+  #[test]
+  fn network_should_return_error_if_remove_by_incorrect_id() {
+    let net: Rc<RefCell<dyn Media>> = Rc::new(RefCell::new(Network::new()));
+
+    net.borrow_mut().create_container(&GroupType::Neural, &net).unwrap();
+    assert_eq!(net.borrow().len(), 1);
+
+    assert!(net.borrow_mut().remove_container("missed").is_err(), "Should return error");
+  }
+
+  #[test]
+  fn network_can_verify_if_contains_container_with_specified_id() {
+    let net: Rc<RefCell<dyn Media>> = Rc::new(RefCell::new(Network::new()));
+
+    let neuron_id = net.borrow_mut().create_container(&GroupType::Neural, &net).unwrap();
+
+    assert!(net.borrow().has_container(neuron_id.as_str()));
+    assert!(!net.borrow().has_container("missed"));
+  }
+
+  #[test]
+  fn network_returns_correct_id_by_get_id() {
+    let net = Network::new();
+    assert_eq!(net.id, net.get_id());
+  }
+
+  #[test]
+  fn should_return_correct_spec_type() {
+    let net = Network::new();
+    assert_eq!(net.get_spec_type(), SpecificationType::Media);
   }
 }

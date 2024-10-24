@@ -156,3 +156,13 @@ impl Identity for Neuron {
         self.id.clone()
     }
 }
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  // #[test]
+  // fn test_creating_neuron() {
+
+  // }
+}

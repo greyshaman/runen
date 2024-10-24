@@ -1,5 +1,4 @@
-#[derive(Clone, PartialEq, Eq, Hash)]
-
+#[derive(Clone, PartialEq, Eq, Hash, Debug)]
 /// The types of specification.
 pub enum SpecificationType {
   Unknown,

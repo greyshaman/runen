@@ -17,6 +17,9 @@ pub trait Media: Identity + Specialized + Any {
   /// Verify if has container by id
   fn has_container(&self, id: &str) -> bool;
 
+  /// Get how many container in this media
+  fn len(&self) -> usize;
+
   fn as_any(&self) -> &dyn Any;
 
   fn as_mut_any(&mut self) -> &mut dyn Any;

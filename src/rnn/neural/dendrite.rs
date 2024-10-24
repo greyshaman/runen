@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::rc::{Rc, Weak};
 
+use crate::rnn::common::collector::Collector;
 use crate::rnn::common::receiver::Receiver;
 use crate::rnn::common::sender::Sender;
 use crate::rnn::common::signal_msg::SignalMessage;
@@ -82,3 +83,5 @@ impl Identity for Dendrite {
     self.id.clone()
   }
 }
+
+impl Collector for Dendrite {}

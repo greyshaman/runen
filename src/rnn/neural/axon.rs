@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::rc::Weak;
 use std::rc::Rc;
 
+use crate::rnn::common::emitter::Emitter;
 use crate::rnn::common::receiver::Receiver;
 use crate::rnn::common::sender::Sender;
 use crate::rnn::common::signal_msg::SignalMessage;
@@ -96,18 +97,81 @@ impl Identity for Axon {
   }
 }
 
+impl Emitter for Axon {}
+
 #[cfg(test)]
 mod tests {
-  use super::*;
+  use std::collections::BTreeMap;
+
+use super::*;
+
+  struct MockNeuron {
+    id: String,
+    components: BTreeMap<String, Rc<RefCell<dyn Receiver>>>,
+    my_ref_opt: Option<Rc<RefCell<dyn Container>>>,
+  }
+
+  impl MockNeuron {
+    pub fn set_my_ref(&mut self, my_ref: &Rc<RefCell<dyn Container>>) {
+      self.my_ref_opt = Some(Rc::clone(my_ref));
+    }
+  }
+
+  // impl Container for MockNeuron {
+  //   fn create_acceptor(
+  //       &mut self,
+  //       max_capacity: Option<i16>,
+  //       regeneration_amount: Option<i16>,
+  //     ) {
+  //       todo!()
+  //   }
+
+  //   fn create_collector(&mut self, weight: Option<i16>) {
+  //       todo!()
+  //   }
+
+  //   fn create_aggregator(&mut self) {
+  //       todo!()
+  //   }
+
+  //   fn create_emitter(&mut self) {
+  //     let axon_id = "Z0E0".to_string();
+  //     self.components.insert(
+  //       axon_id.clone(),
+  //       Rc::new(RefCell::new(Axon::new(&axon_id, &self.my_ref_opt.unwrap()))));
+  //   }
+
+  //   fn get_component(&self, id: &str) -> Option<&Rc<RefCell<dyn Receiver>>> {
+  //       todo!()
+  //   }
+
+  //   fn remove_component(&mut self, id: &str) -> Result<(), Box<dyn std::error::Error>> {
+  //       todo!()
+  //   }
+
+  //   fn as_any(&self) -> &dyn std::any::Any {
+  //       todo!()
+  //   }
+
+  //   fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
+  //       todo!()
+  //   }
+  // }
 
   struct MockAcceptor {
-    accepted_signal: u8,
+    accepted_signal: i16,
   }
 
-  #[test]
-  fn test1() {
-    let t = 1;
-    assert_eq!(t, 1);
-  }
+  // #[test]
+  // fn test_can_receive_positive_signal() {
+  //   let mut neuron = Rc::new(
+  //     RefCell::new(
+  //       MockNeuron { id: String::from("Z0"), components: BTreeMap::new(), my_ref_opt: None }
+  //     )
+  //   );
+  //   // neuron.borrow_mut().set_my_ref(&Rc::clone(&neuron));
+  //   let t = 1;
+  //   assert_eq!(t, 1);
+  // }
 
 }

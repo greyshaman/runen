@@ -3,6 +3,7 @@ use std::cmp::max;
 use std::rc::Weak;
 use std::{collections::HashSet, rc::Rc};
 
+use crate::rnn::common::aggregator::Aggregator;
 use crate::rnn::common::identity::Identity;
 use crate::rnn::common::receiver::Receiver;
 use crate::rnn::common::sender::Sender;
@@ -117,3 +118,5 @@ impl Identity for Neurosoma {
     self.id.clone()
   }
 }
+
+impl Aggregator for Neurosoma {}

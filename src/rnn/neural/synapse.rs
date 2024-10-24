@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::cmp::min;
 use std::rc::{Rc, Weak};
 
+use crate::rnn::common::acceptor::Acceptor;
 use crate::rnn::common::connectable::Connectable;
 use crate::rnn::common::container::Container;
 use crate::rnn::common::receiver::Receiver;
@@ -100,3 +101,5 @@ impl Identity for Synapse {
     self.id.clone()
   }
 }
+
+impl Acceptor for Synapse {}
