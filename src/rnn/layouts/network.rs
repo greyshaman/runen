@@ -1,5 +1,6 @@
 use core::fmt;
 use std::cell::RefCell;
+use std::collections::hash_map::Entry;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::collections::HashMap;
@@ -81,22 +82,28 @@ impl Media for Network {
   }
 
   fn create_container(&mut self, group_type: &GroupType, media: &Rc<RefCell<dyn Media>>)
-    -> Result<String, Box<dyn std::error::Error>> {
+    -> Result<Rc<RefCell<dyn Container>>, Box<dyn std::error::Error>> {
     let prefix = match group_type {
         GroupType::Neural => 'Z',
         GroupType::Cyber => 'Y',
     };
     let new_id = format!("{prefix}{}", self.get_available_id_fraction_for(group_type));
-
-    let container = Neuron::new(&new_id, media);
-    self.containers.insert(new_id.clone(), Rc::new(RefCell::new(container)));
-    Ok(new_id)
+    match self.containers.entry(new_id.clone()) {
+      Entry::Vacant(entry) => {
+        Ok(
+          Rc::clone(
+            entry.insert(Rc::new(RefCell::new(Neuron::new(&new_id, media))))
+          )
+        )
+      }
+      Entry::Occupied(_) => Err(Box::new(RnnError::IdBusy)),
+    }
   }
 
   fn remove_container(&mut self, id: &str) -> Result<(), Box<dyn std::error::Error>> {
     match self.containers.remove(id) {
       Some(_) => Ok(()),
-      None => Err(Box::new(RnnError::KeyNotFound))
+      None => Err(Box::new(RnnError::IdNotFound))
     }
   }
 
@@ -162,7 +169,8 @@ mod tests {
   fn network_can_get_container_after_create() {
     let net: Rc<RefCell<dyn Media>> = Rc::new(RefCell::new(Network::new()));
 
-    let neuron_id = net.borrow_mut().create_container(&GroupType::Neural, &net).unwrap();
+    let neuron_rc = net.borrow_mut().create_container(&GroupType::Neural, &net).unwrap();
+    let neuron_id = neuron_rc.borrow().get_id();
 
     assert_eq!(net.borrow().len(), 1);
     assert!(net.borrow().get_container(neuron_id.as_str()).is_some(), "Container not found");
@@ -173,10 +181,10 @@ mod tests {
   fn network_can_remove_container_after_create() {
     let net: Rc<RefCell<dyn Media>> = Rc::new(RefCell::new(Network::new()));
 
-    let neuron_id = net.borrow_mut().create_container(&GroupType::Neural, &net).unwrap();
+    let neuron_rc = net.borrow_mut().create_container(&GroupType::Neural, &net).unwrap();
     assert_eq!(net.borrow().len(), 1);
 
-    assert!(net.borrow_mut().remove_container(&neuron_id).is_ok());
+    assert!(net.borrow_mut().remove_container(&neuron_rc.borrow().get_id()).is_ok());
     assert_eq!(net.borrow().len(), 0);
   }
 
@@ -184,8 +192,9 @@ mod tests {
   fn network_should_return_error_if_remove_by_incorrect_id() {
     let net: Rc<RefCell<dyn Media>> = Rc::new(RefCell::new(Network::new()));
 
-    let container_id = net.borrow_mut()
+    let container_rc = net.borrow_mut()
       .create_container(&GroupType::Neural, &net).unwrap();
+    let container_id = container_rc.borrow().get_id();
     assert_eq!(net.borrow().len(), 1);
 
     assert!(net.borrow_mut().remove_container("missed").is_err(), "Should return error");
@@ -199,9 +208,10 @@ mod tests {
   fn network_can_verify_if_contains_container_with_specified_id() {
     let net: Rc<RefCell<dyn Media>> = Rc::new(RefCell::new(Network::new()));
 
-    let neuron_id = net.borrow_mut().create_container(&GroupType::Neural, &net).unwrap();
+    let neuron_rc =
+      net.borrow_mut().create_container(&GroupType::Neural, &net).unwrap();
 
-    assert!(net.borrow().has_container(neuron_id.as_str()));
+    assert!(net.borrow().has_container(neuron_rc.borrow().get_id().as_str()));
     assert!(!net.borrow().has_container("missed"));
   }
 

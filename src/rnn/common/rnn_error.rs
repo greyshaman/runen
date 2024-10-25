@@ -7,7 +7,10 @@ pub enum RnnError {
   OccupiedKey,
 
   /// Not found key when try to use it to access element in Map or Set
-  KeyNotFound,
+  IdNotFound,
+
+  /// Error on attempt to create unique entity with used Id
+  IdBusy,
 
   /// Not found matched data by provided pattern
   PatternNotFound,

@@ -9,7 +9,8 @@ pub trait Media: Identity + Specialized + Any {
   fn get_container(&self, id: &str) -> Option<&Rc<RefCell<dyn Container>>>;
 
   /// Create and insert container
-  fn create_container(&mut self, group_type: &GroupType, media: &Rc<RefCell<dyn Media>>) -> Result<String, Box<dyn Error>>;
+  fn create_container(&mut self, group_type: &GroupType, media: &Rc<RefCell<dyn Media>>)
+  -> Result<Rc<RefCell<dyn Container>>, Box<dyn Error>>;
 
   /// Remove container with dependencies
   fn remove_container(&mut self, id: &str) -> Result<(), Box<dyn Error>>;
