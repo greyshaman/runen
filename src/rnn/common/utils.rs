@@ -1,6 +1,6 @@
 use std::error::Error;
 
-use regex::{Captures, Regex};
+use regex::Regex;
 
 use super::{group_type::GroupType, rnn_error::RnnError, spec_type::SpecificationType};
 
