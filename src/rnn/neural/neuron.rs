@@ -125,17 +125,30 @@ impl Container for Neuron {
   fn remove_component(&mut self, id: &str) -> Result<(), Box<dyn std::error::Error>> {
     self.components.remove(id)
       .map_or(
-        Err(Box::new(RnnError::KeyNotFound)),
+        Err(Box::new(RnnError::IdNotFound)),
         |_| Ok(())
       )
   }
 
   fn as_any(&self) -> &dyn std::any::Any {
-      self
+    self
   }
 
   fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
-      self
+    self
+  }
+
+  fn len(&self) -> usize {
+    self.components.len()
+  }
+
+  fn len_by_spec_type(&self, spec_type: &SpecificationType) -> usize {
+    self.components
+      .values()
+      .filter(|item| {
+        item.borrow().get_spec_type() == *spec_type
+      })
+      .count()
   }
 }
 
@@ -159,10 +172,19 @@ impl Identity for Neuron {
 
 #[cfg(test)]
 mod tests {
+  use crate::rnn::layouts::network::Network;
+
   use super::*;
 
-  // #[test]
-  // fn test_creating_neuron() {
+  #[test]
+  fn get_ids_for_new_neuron_should_return_empty_list() {
+    let net: Rc<RefCell<dyn Media>> =
+      Rc::new(RefCell::new(Network::new()));
 
-  // }
+    let new_neuron = net.borrow_mut()
+      .create_container(&GroupType::Neural, &net)
+      .unwrap();
+
+    assert_eq!(new_neuron.borrow().len(), 0);
+  }
 }

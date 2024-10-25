@@ -7,6 +7,7 @@ use std::rc::Rc;
 use super::grouped::Grouped;
 use super::identity::Identity;
 use super::receiver::Receiver;
+use super::spec_type::SpecificationType;
 use super::specialized::Specialized;
 
 /// A substance that can contain different elements in its composition.
@@ -32,6 +33,12 @@ pub trait Container: Identity + Specialized + Grouped + Any + Debug {
 
   /// Deleting a component by its ID
   fn remove_component(&mut self, id: &str) -> Result<(), Box<dyn Error>>;
+
+  /// Returns how many container contains components
+  fn len(&self) -> usize;
+
+  /// Returns how many components with specified spec_type have container
+  fn len_by_spec_type(&self, spec_type: &SpecificationType) -> usize;
 
   /// Reflection method
   fn as_any(&self) -> &dyn Any;
