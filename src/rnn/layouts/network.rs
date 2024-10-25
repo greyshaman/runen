@@ -184,10 +184,15 @@ mod tests {
   fn network_should_return_error_if_remove_by_incorrect_id() {
     let net: Rc<RefCell<dyn Media>> = Rc::new(RefCell::new(Network::new()));
 
-    net.borrow_mut().create_container(&GroupType::Neural, &net).unwrap();
+    let container_id = net.borrow_mut()
+      .create_container(&GroupType::Neural, &net).unwrap();
     assert_eq!(net.borrow().len(), 1);
 
     assert!(net.borrow_mut().remove_container("missed").is_err(), "Should return error");
+
+    let binding_media = net.borrow();
+    let result = binding_media.get_container(&container_id).unwrap();
+    assert_eq!(result.borrow().get_id(), container_id);
   }
 
   #[test]
