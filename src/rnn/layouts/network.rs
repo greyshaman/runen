@@ -62,7 +62,6 @@ impl Network {
           let r_patter = match group_type {
             GroupType::Neural => r"Z(\d+)",
             GroupType::Cyber => r"Y(\d+)",
-            _ => return 0,
           };
 
           let rex = Regex::new(&r_patter).unwrap();
@@ -153,7 +152,7 @@ mod tests {
     let net: Rc<RefCell<dyn Media>> = Rc::new(RefCell::new(Network::new()));
 
     for _ in 0..=1 {
-      net.borrow_mut().create_container(&GroupType::Neural, &net).is_ok();
+      assert!(net.borrow_mut().create_container(&GroupType::Neural, &net).is_ok());
     }
 
     assert_eq!(net.borrow().len(), 2);
@@ -177,7 +176,7 @@ mod tests {
     let neuron_id = net.borrow_mut().create_container(&GroupType::Neural, &net).unwrap();
     assert_eq!(net.borrow().len(), 1);
 
-    net.borrow_mut().remove_container(&neuron_id);
+    assert!(net.borrow_mut().remove_container(&neuron_id).is_ok());
     assert_eq!(net.borrow().len(), 0);
   }
 
