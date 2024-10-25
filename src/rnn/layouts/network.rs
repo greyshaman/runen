@@ -31,7 +31,7 @@ impl Network {
       "",
       unsafe { ID_COUNTER.fetch_add(1, Ordering::Relaxed) },
       &SpecificationType::Media
-    );
+    ).unwrap();
 
     Network {
       id,
@@ -61,8 +61,8 @@ impl Network {
           if id.is_empty() { return 0; }
 
           let r_patter = match group_type {
-            GroupType::Neural => r"Z(\d+)",
-            GroupType::Cyber => r"Y(\d+)",
+            GroupType::Neural => r"^M\d+Z(\d+)$",
+            GroupType::Cyber => r"^M\d+Y(\d+)$",
           };
 
           let rex = Regex::new(&r_patter).unwrap();
@@ -87,7 +87,7 @@ impl Media for Network {
         GroupType::Neural => 'Z',
         GroupType::Cyber => 'Y',
     };
-    let new_id = format!("{prefix}{}", self.get_available_id_fraction_for(group_type));
+    let new_id = format!("{}{prefix}{}", self.get_id(), self.get_available_id_fraction_for(group_type));
     match self.containers.entry(new_id.clone()) {
       Entry::Vacant(entry) => {
         Ok(

@@ -66,7 +66,7 @@ impl Neuron {
       &self.id,
       self.get_available_id_fraction_for(spec_type),
       spec_type,
-    )
+    ).unwrap()
   }
 }
 
@@ -176,15 +176,105 @@ mod tests {
 
   use super::*;
 
-  #[test]
-  fn get_ids_for_new_neuron_should_return_empty_list() {
-    let net: Rc<RefCell<dyn Media>> =
-      Rc::new(RefCell::new(Network::new()));
 
-    let new_neuron = net.borrow_mut()
-      .create_container(&GroupType::Neural, &net)
-      .unwrap();
+  mod for_empty_neuron {
+    use super::*;
 
-    assert_eq!(new_neuron.borrow().len(), 0);
+    fn fixture_new_empty_neuron() -> (Box<Rc<RefCell<dyn Media>>>, Box<Rc<RefCell<dyn Container>>>) {
+      let net: Rc<RefCell<dyn Media>> =
+        Rc::new(RefCell::new(Network::new()));
+
+      let neuron = net.borrow_mut()
+        .create_container(&GroupType::Neural, &net)
+        .unwrap();
+
+      (Box::new(net), Box::new(neuron))
+    }
+
+    #[test]
+    fn get_ids_for_should_return_empty_list() {
+      let (_net, new_neuron) = fixture_new_empty_neuron();
+
+      assert!(
+        new_neuron.borrow().as_any().downcast_ref::<Neuron>().unwrap().get_ids_for(&SpecificationType::Aggregator).is_empty()
+      );
+    }
+
+    #[test]
+    fn get_available_id_fraction_for_should_return_zero() {
+      let (_net, new_neuron) = fixture_new_empty_neuron();
+
+      assert_eq!(
+        new_neuron.borrow()
+          .as_any()
+          .downcast_ref::<Neuron>()
+          .unwrap()
+          .get_available_id_fraction_for(&SpecificationType::Acceptor),
+        0
+      );
+    }
+
+    #[ignore = "need to implement utils tests before"]
+    #[test]
+    fn prepare_new_component_id_should_return_available_id() {
+      let (_net, new_neuron) = fixture_new_empty_neuron();
+
+      let available_id = new_neuron.borrow()
+        .as_any()
+        .downcast_ref::<Neuron>()
+        .unwrap()
+        .prepare_new_component_id(&SpecificationType::Acceptor);
+    }
+
+    // let expected
+
+    #[test]
+    fn len_should_return_zero() {
+      let net: Rc<RefCell<dyn Media>> =
+        Rc::new(RefCell::new(Network::new()));
+
+      let new_neuron = net.borrow_mut()
+        .create_container(&GroupType::Neural, &net)
+        .unwrap();
+
+      assert_eq!(new_neuron.borrow().len(), 0);
+    }
   }
+
+  mod for_non_empty_neuron {
+    use super::*;
+
+    #[test]
+    fn get_ids_for_should_return_non_empty_list() {
+      let net: Rc<RefCell<dyn Media>> =
+        Rc::new(RefCell::new(Network::new()));
+
+      let new_neuron = net.borrow_mut()
+        .create_container(&GroupType::Neural, &net)
+        .unwrap();
+
+      new_neuron.borrow_mut().create_acceptor(None, None);
+
+      assert!(
+        !new_neuron.borrow().as_any().downcast_ref::<Neuron>().unwrap().get_ids_for(&SpecificationType::Acceptor).is_empty()
+      );
+    }
+
+    #[test]
+    fn len_should_return_positive_number() {
+      let net: Rc<RefCell<dyn Media>> =
+        Rc::new(RefCell::new(Network::new()));
+
+      let new_neuron = net.borrow_mut()
+        .create_container(&GroupType::Neural, &net)
+        .unwrap();
+
+      new_neuron.borrow_mut().create_acceptor(None, None);
+
+      assert!(
+        new_neuron.borrow().len() > 0
+      );
+    }
+  }
+
 }
