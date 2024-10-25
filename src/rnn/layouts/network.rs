@@ -140,7 +140,7 @@ mod tests {
   use super::*;
 
   #[test]
-  fn can_create_two_unique_networks() {
+  fn should_create_two_unique_networks() {
     let n1 = Network::new();
     let n2 = Network::new();
 
@@ -148,7 +148,7 @@ mod tests {
   }
 
   #[test]
-  fn can_create_two_neurons() {
+  fn should_create_two_neurons() {
     let net: Rc<RefCell<dyn Media>> = Rc::new(RefCell::new(Network::new()));
 
     for _ in 0..=1 {
