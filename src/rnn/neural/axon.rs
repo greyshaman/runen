@@ -121,60 +121,10 @@ impl Emitter for Axon {}
 
 #[cfg(test)]
 mod tests {
-    use mock::MockComponent;
-
+    use crate::rnn::tests::mock::mocks::MockComponent;
     use crate::rnn::{common::media::Media, layouts::network::Network};
 
     use super::*;
-
-    mod mock {
-        use super::*;
-
-        #[derive(Debug, Default)]
-        pub struct MockComponent {
-            id: String,
-            pub signal: i16,
-            pub source_id: String,
-        }
-
-        impl Component for MockComponent {
-            fn receive(&mut self, signal_msg: Box<SignalMessage>) {
-                let SignalMessage(signal, source_id) = *signal_msg;
-                self.signal = signal;
-                self.source_id = *source_id;
-            }
-
-            fn send(&self, _signal: i16) {
-                unimplemented!()
-            }
-
-            fn get_container(&self) -> Option<Rc<RefCell<dyn Container>>> {
-                None
-            }
-
-            fn as_any(&self) -> &dyn std::any::Any {
-                self
-            }
-
-            fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
-                self
-            }
-        }
-
-        impl Identity for MockComponent {
-            fn get_id(&self) -> String {
-                self.id.clone()
-            }
-        }
-
-        impl Connectable for MockComponent {}
-
-        impl Specialized for MockComponent {
-            fn get_spec_type(&self) -> SpecificationType {
-                SpecificationType::Synapse
-            }
-        }
-    }
 
     fn fixture_new_axon() -> (Box<Rc<RefCell<dyn Media>>>, Box<Rc<RefCell<dyn Component>>>) {
         let net: Rc<RefCell<dyn Media>> = Rc::new(RefCell::new(Network::new()));
@@ -191,12 +141,12 @@ mod tests {
 
     #[test]
     fn can_send_only_positive_signal_with_save_value_as_received_to_all_connected_synapses() {
-        let (_net, axon_boxed) = fixture_new_axon();
+        let (_net, boxed_axon) = fixture_new_axon();
         let synapse1: Rc<RefCell<dyn Component>> = Rc::new(RefCell::new(MockComponent::default()));
         let synapse2: Rc<RefCell<dyn Component>> = Rc::new(RefCell::new(MockComponent::default()));
 
         {
-            let binding = axon_boxed.borrow();
+            let binding = boxed_axon.borrow();
             let axon = binding.as_any().downcast_ref::<Axon>().unwrap();
 
             axon.acceptors
@@ -207,7 +157,7 @@ mod tests {
                 .insert("2".to_string(), Rc::downgrade(&synapse2));
         }
 
-        let mut binding = axon_boxed.borrow_mut();
+        let mut binding = boxed_axon.borrow_mut();
         let axon_mut = binding.as_mut_any().downcast_mut::<Axon>().unwrap();
         axon_mut.receive(Box::new(SignalMessage(5, Box::new(axon_mut.get_id()))));
 

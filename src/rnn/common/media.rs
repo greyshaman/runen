@@ -14,7 +14,7 @@ pub trait Media: Identity + Specialized + Any {
     /// Create and insert container
     fn create_container(
         &mut self,
-        Spec_type: &SpecificationType,
+        spec_type: &SpecificationType,
         media: &Rc<RefCell<dyn Media>>,
     ) -> Result<Rc<RefCell<dyn Container>>, Box<dyn Error>>;
 

@@ -115,3 +115,54 @@ impl Identity for Synapse {
 }
 
 impl Acceptor for Synapse {}
+
+#[cfg(test)]
+mod tests {
+    use std::boxed;
+
+    use crate::rnn::common::media::Media;
+    use crate::rnn::layouts::network::Network;
+    use crate::rnn::tests::mock::mocks::MockComponent;
+
+    use super::*;
+
+    fn fixture_new_synapse(
+        max_capacity: Option<i16>,
+        regeneration_amount: Option<i16>,
+    ) -> (Box<Rc<RefCell<dyn Media>>>, Box<Rc<RefCell<dyn Component>>>) {
+        let net: Rc<RefCell<dyn Media>> = Rc::new(RefCell::new(Network::new()));
+
+        let neuron = net
+            .borrow_mut()
+            .create_container(&SpecificationType::Neuron, &net)
+            .unwrap();
+
+        let synapse = neuron
+            .borrow_mut()
+            .create_acceptor(max_capacity, regeneration_amount)
+            .unwrap();
+
+        (Box::new(net), Box::new(synapse))
+    }
+
+    #[test]
+    fn should_limit_input_signal_by_max_capacity() {
+        let (_net, boxed_synapse) = fixture_new_synapse(None, None);
+        let collector: Rc<RefCell<dyn Component>> = Rc::new(RefCell::new(MockComponent::default()));
+
+        {
+            let mut component = boxed_synapse.borrow_mut();
+            let mut synapse = component.as_mut_any().downcast_mut::<Synapse>().unwrap();
+
+            synapse.collector = Some(Rc::clone(&collector));
+            synapse.receive(Box::new(SignalMessage(3, Box::new(synapse.get_id()))));
+        }
+
+        let mock_collector = collector.borrow();
+        let mock_collector = mock_collector
+            .as_any()
+            .downcast_ref::<MockComponent>()
+            .unwrap();
+        assert_eq!(mock_collector.signal, 1)
+    }
+}
