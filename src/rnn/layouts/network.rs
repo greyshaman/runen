@@ -8,7 +8,6 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use regex::Regex;
 
 use crate::rnn::common::container::Container;
-use crate::rnn::common::group_type::GroupType;
 use crate::rnn::common::identity::Identity;
 use crate::rnn::common::media::Media;
 use crate::rnn::common::rnn_error::RnnError;
@@ -30,7 +29,7 @@ impl Network {
         let id = gen_id_by_spec_type(
             "",
             unsafe { ID_COUNTER.fetch_add(1, Ordering::Relaxed) },
-            &SpecificationType::Media,
+            &SpecificationType::Network,
         )
         .unwrap();
 
@@ -40,12 +39,12 @@ impl Network {
         }
     }
 
-    fn get_ids_by_group_type(&self, group_type: &GroupType) -> Vec<String> {
+    fn get_ids_by_spec_type(&self, spec_type: &SpecificationType) -> Vec<String> {
         self.containers
             .values()
             .filter_map(|item| {
                 let item = item.borrow();
-                if item.get_group_type() == *group_type {
+                if item.get_spec_type() == *spec_type {
                     Some(item.get_id().clone())
                 } else {
                     None
@@ -54,27 +53,27 @@ impl Network {
             .collect()
     }
 
-    fn get_available_id_fraction_for(&self, group_type: &GroupType) -> usize {
-        self.get_ids_by_group_type(group_type)
-            .last()
-            .map_or(0, |id| {
-                if id.is_empty() {
-                    return 0;
-                }
+    fn get_available_id_fraction_for(&self, spec_type: &SpecificationType) -> usize {
+        self.get_ids_by_spec_type(spec_type).last().map_or(0, |id| {
+            if id.is_empty() {
+                return 0;
+            }
 
-                let r_patter = match group_type {
-                    GroupType::Neural => r"^M\d+Z(\d+)$",
-                    GroupType::Cyber => r"^M\d+Y(\d+)$",
-                };
+            let r_patter = match spec_type {
+                &SpecificationType::Neuron => r"^M\d+Z(\d+)$",
+                &SpecificationType::InputTerminator => r"^M\d+Y(\d+)$",
+                &SpecificationType::OutputTerminator => r"^M\d+X(\d+)$",
+                _ => r"^$",
+            };
 
-                let rex = Regex::new(&r_patter).unwrap();
-                let captures = rex.captures(id).unwrap();
-                if &captures.len() < &2 {
-                    return 0;
-                }
-                let id_num = captures[1].parse::<usize>().unwrap();
-                id_num + 1
-            })
+            let rex = Regex::new(&r_patter).unwrap();
+            let captures = rex.captures(id).unwrap();
+            if &captures.len() < &2 {
+                return 0;
+            }
+            let id_num = captures[1].parse::<usize>().unwrap();
+            id_num + 1
+        })
     }
 }
 
@@ -85,17 +84,19 @@ impl Media for Network {
 
     fn create_container(
         &mut self,
-        group_type: &GroupType,
+        spec_type: &SpecificationType,
         media: &Rc<RefCell<dyn Media>>,
     ) -> Result<Rc<RefCell<dyn Container>>, Box<dyn std::error::Error>> {
-        let prefix = match group_type {
-            GroupType::Neural => 'Z',
-            GroupType::Cyber => 'Y',
+        let prefix = match spec_type {
+            &SpecificationType::Neuron => 'Z',
+            &SpecificationType::Receptor => 'Y',
+            &SpecificationType::Activator => 'X',
+            _ => return Err(Box::new(RnnError::NotSupportedArgValue)),
         };
         let new_id = format!(
             "{}{prefix}{}",
             self.get_id(),
-            self.get_available_id_fraction_for(group_type)
+            self.get_available_id_fraction_for(spec_type)
         );
         match self.containers.entry(new_id.clone()) {
             Entry::Vacant(entry) => Ok(Rc::clone(
@@ -137,7 +138,7 @@ impl Identity for Network {
 
 impl Specialized for Network {
     fn get_spec_type(&self) -> SpecificationType {
-        SpecificationType::Media
+        SpecificationType::Network
     }
 }
 
@@ -166,7 +167,7 @@ mod tests {
         for _ in 0..=1 {
             assert!(net
                 .borrow_mut()
-                .create_container(&GroupType::Neural, &net)
+                .create_container(&SpecificationType::Neuron, &net)
                 .is_ok());
         }
 
@@ -179,7 +180,7 @@ mod tests {
 
         let neuron_rc = net
             .borrow_mut()
-            .create_container(&GroupType::Neural, &net)
+            .create_container(&SpecificationType::Neuron, &net)
             .unwrap();
         let neuron_id = neuron_rc.borrow().get_id();
 
@@ -200,7 +201,7 @@ mod tests {
 
         let neuron_rc = net
             .borrow_mut()
-            .create_container(&GroupType::Neural, &net)
+            .create_container(&SpecificationType::Neuron, &net)
             .unwrap();
         assert_eq!(net.borrow().len(), 1);
 
@@ -217,7 +218,7 @@ mod tests {
 
         let container_rc = net
             .borrow_mut()
-            .create_container(&GroupType::Neural, &net)
+            .create_container(&SpecificationType::Neuron, &net)
             .unwrap();
         let container_id = container_rc.borrow().get_id();
         assert_eq!(net.borrow().len(), 1);
@@ -238,7 +239,7 @@ mod tests {
 
         let neuron_rc = net
             .borrow_mut()
-            .create_container(&GroupType::Neural, &net)
+            .create_container(&SpecificationType::Neuron, &net)
             .unwrap();
 
         assert!(net
@@ -256,6 +257,6 @@ mod tests {
     #[test]
     fn should_return_correct_spec_type() {
         let net = Network::new();
-        assert_eq!(net.get_spec_type(), SpecificationType::Media);
+        assert_eq!(net.get_spec_type(), SpecificationType::Network);
     }
 }

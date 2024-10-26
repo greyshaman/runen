@@ -1,11 +1,11 @@
 [package]
 name = "runen"
-version = "0.0.5"
+version = "0.0.6"
 edition = "2021"
 authors = ["Sergey Reshetnikov <shaman@simmirra.com>"]
 
 [dependencies]
-regex = "1.11.0"
+regex = "1.11.1"
 
 [lib]
 name = "librunen"

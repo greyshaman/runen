@@ -7,17 +7,16 @@ use std::error::Error;
 use std::rc::Rc;
 use std::rc::Weak;
 
+use crate::rnn::common::component::Component;
 use crate::rnn::common::container::Container;
-use crate::rnn::common::group_type::GroupType;
 use crate::rnn::common::identity::Identity;
 use crate::rnn::common::media::Media;
-use crate::rnn::common::receiver::Receiver;
 use crate::rnn::common::rnn_error::RnnError;
 use crate::rnn::common::spec_type::SpecificationType;
 use crate::rnn::common::specialized::Specialized;
 use crate::rnn::common::utils::check_id_on_siblings;
 use crate::rnn::common::utils::gen_id_by_spec_type;
-use crate::rnn::common::{grouped::Grouped, utils::get_component_id_fraction};
+use crate::rnn::common::utils::get_component_id_fraction;
 
 use super::axon::Axon;
 use super::dendrite::Dendrite;
@@ -28,7 +27,7 @@ use super::synapse::Synapse;
 pub struct Neuron {
     id: String,
     network: RefCell<Weak<RefCell<dyn Media>>>,
-    components: BTreeMap<String, Rc<RefCell<dyn Receiver>>>,
+    components: BTreeMap<String, Rc<RefCell<dyn Component>>>,
 }
 
 impl Neuron {
@@ -77,10 +76,10 @@ impl Container for Neuron {
         &mut self,
         max_capacity: Option<i16>,
         regeneration_amount: Option<i16>,
-    ) -> Result<Rc<RefCell<dyn Receiver>>, Box<dyn Error>> {
-        let acceptor_id = self.prepare_new_component_id(&SpecificationType::Acceptor)?;
+    ) -> Result<Rc<RefCell<dyn Component>>, Box<dyn Error>> {
+        let acceptor_id = self.prepare_new_component_id(&SpecificationType::Synapse)?;
 
-        if !check_id_on_siblings(&acceptor_id, &SpecificationType::Acceptor) {
+        if !check_id_on_siblings(&acceptor_id, &SpecificationType::Synapse) {
             return Err(Box::new(RnnError::OnlySingleAllowed));
         }
 
@@ -107,10 +106,10 @@ impl Container for Neuron {
     fn create_collector(
         &mut self,
         weight: Option<i16>,
-    ) -> Result<Rc<RefCell<dyn Receiver>>, Box<dyn Error>> {
-        let collector_id = self.prepare_new_component_id(&SpecificationType::Collector)?;
+    ) -> Result<Rc<RefCell<dyn Component>>, Box<dyn Error>> {
+        let collector_id = self.prepare_new_component_id(&SpecificationType::Dendrite)?;
 
-        if !check_id_on_siblings(&collector_id, &SpecificationType::Collector) {
+        if !check_id_on_siblings(&collector_id, &SpecificationType::Dendrite) {
             return Err(Box::new(RnnError::OnlySingleAllowed));
         }
 
@@ -133,10 +132,10 @@ impl Container for Neuron {
         ))
     }
 
-    fn create_aggregator(&mut self) -> Result<Rc<RefCell<(dyn Receiver)>>, Box<(dyn Error)>> {
-        let aggregator_id = self.prepare_new_component_id(&SpecificationType::Aggregator)?;
+    fn create_aggregator(&mut self) -> Result<Rc<RefCell<(dyn Component)>>, Box<(dyn Error)>> {
+        let aggregator_id = self.prepare_new_component_id(&SpecificationType::Neurosoma)?;
 
-        if !check_id_on_siblings(&aggregator_id, &SpecificationType::Aggregator) {
+        if !check_id_on_siblings(&aggregator_id, &SpecificationType::Neurosoma) {
             return Err(Box::new(RnnError::OnlySingleAllowed));
         }
 
@@ -160,10 +159,10 @@ impl Container for Neuron {
         }
     }
 
-    fn create_emitter(&mut self) -> Result<Rc<RefCell<dyn Receiver>>, Box<dyn Error>> {
-        let emitter_id = self.prepare_new_component_id(&SpecificationType::Emitter)?;
+    fn create_emitter(&mut self) -> Result<Rc<RefCell<dyn Component>>, Box<dyn Error>> {
+        let emitter_id = self.prepare_new_component_id(&SpecificationType::Axon)?;
 
-        if !check_id_on_siblings(&emitter_id, &SpecificationType::Emitter) {
+        if !check_id_on_siblings(&emitter_id, &SpecificationType::Axon) {
             return Err(Box::new(RnnError::OnlySingleAllowed));
         }
 
@@ -176,7 +175,7 @@ impl Container for Neuron {
                 .borrow()
                 .get_container(self.get_id().as_str())
                 .unwrap(),
-        );
+        )?;
 
         match self.components.entry(emitter_id) {
             Entry::Vacant(entry) => {
@@ -187,7 +186,7 @@ impl Container for Neuron {
         }
     }
 
-    fn get_component(&self, id: &str) -> Option<&Rc<RefCell<dyn Receiver>>> {
+    fn get_component(&self, id: &str) -> Option<&Rc<RefCell<dyn Component>>> {
         self.components.get(id)
     }
 
@@ -217,15 +216,9 @@ impl Container for Neuron {
     }
 }
 
-impl Grouped for Neuron {
-    fn get_group_type(&self) -> GroupType {
-        GroupType::Neural
-    }
-}
-
 impl Specialized for Neuron {
     fn get_spec_type(&self) -> SpecificationType {
-        SpecificationType::Container
+        SpecificationType::Neuron
     }
 }
 
@@ -247,7 +240,7 @@ mod tests {
 
         let neuron = net
             .borrow_mut()
-            .create_container(&GroupType::Neural, &net)
+            .create_container(&SpecificationType::Neuron, &net)
             .unwrap();
 
         (Box::new(net), Box::new(neuron))
@@ -265,7 +258,7 @@ mod tests {
                 .as_any()
                 .downcast_ref::<Neuron>()
                 .unwrap()
-                .get_ids_for(&SpecificationType::Aggregator)
+                .get_ids_for(&SpecificationType::Neurosoma)
                 .is_empty());
         }
 
@@ -279,7 +272,7 @@ mod tests {
                     .as_any()
                     .downcast_ref::<Neuron>()
                     .unwrap()
-                    .get_available_id_fraction_for(&SpecificationType::Acceptor),
+                    .get_available_id_fraction_for(&SpecificationType::Synapse),
                 0
             );
         }
@@ -295,7 +288,7 @@ mod tests {
                 .as_any()
                 .downcast_ref::<Neuron>()
                 .unwrap()
-                .prepare_new_component_id(&SpecificationType::Acceptor)
+                .prepare_new_component_id(&SpecificationType::Synapse)
                 .unwrap();
 
             assert_eq!(available_id, format!("{}{}", neuron_id, "A0"));
@@ -342,7 +335,7 @@ mod tests {
 
             let new_neuron = net
                 .borrow_mut()
-                .create_container(&GroupType::Neural, &net)
+                .create_container(&SpecificationType::Neuron, &net)
                 .unwrap();
 
             assert_eq!(new_neuron.borrow().len(), 0);
@@ -354,13 +347,13 @@ mod tests {
 
             let new_neuron = net
                 .borrow_mut()
-                .create_container(&GroupType::Neural, &net)
+                .create_container(&SpecificationType::Neuron, &net)
                 .unwrap();
 
             assert_eq!(
                 new_neuron
                     .borrow()
-                    .len_by_spec_type(&SpecificationType::Acceptor),
+                    .len_by_spec_type(&SpecificationType::Synapse),
                 0
             );
         }
@@ -381,7 +374,7 @@ mod tests {
                 .as_any()
                 .downcast_ref::<Neuron>()
                 .unwrap()
-                .get_ids_for(&SpecificationType::Acceptor)
+                .get_ids_for(&SpecificationType::Synapse)
                 .is_empty());
         }
 
@@ -446,7 +439,7 @@ mod tests {
             assert_eq!(
                 new_neuron
                     .borrow()
-                    .len_by_spec_type(&SpecificationType::Acceptor),
+                    .len_by_spec_type(&SpecificationType::Synapse),
                 1
             );
             assert!(new_neuron
@@ -474,13 +467,13 @@ mod tests {
             assert!(
                 new_neuron
                     .borrow_mut()
-                    .len_by_spec_type(&SpecificationType::Acceptor)
+                    .len_by_spec_type(&SpecificationType::Synapse)
                     > 0
             );
             assert_eq!(
                 new_neuron
                     .borrow_mut()
-                    .len_by_spec_type(&SpecificationType::Collector),
+                    .len_by_spec_type(&SpecificationType::Dendrite),
                 0
             );
         }

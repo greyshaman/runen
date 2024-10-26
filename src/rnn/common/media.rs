@@ -1,7 +1,8 @@
 use std::{any::Any, cell::RefCell, error::Error, rc::Rc};
 
 use super::{
-    container::Container, group_type::GroupType, identity::Identity, specialized::Specialized,
+    container::Container, identity::Identity, spec_type::SpecificationType,
+    specialized::Specialized,
 };
 
 /// Media is a system that consists of various functional elements in containers.
@@ -13,7 +14,7 @@ pub trait Media: Identity + Specialized + Any {
     /// Create and insert container
     fn create_container(
         &mut self,
-        group_type: &GroupType,
+        Spec_type: &SpecificationType,
         media: &Rc<RefCell<dyn Media>>,
     ) -> Result<Rc<RefCell<dyn Container>>, Box<dyn Error>>;
 

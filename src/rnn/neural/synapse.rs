@@ -3,11 +3,10 @@ use std::cmp::min;
 use std::rc::{Rc, Weak};
 
 use crate::rnn::common::acceptor::Acceptor;
+use crate::rnn::common::component::Component;
 use crate::rnn::common::connectable::Connectable;
 use crate::rnn::common::container::Container;
 use crate::rnn::common::identity::Identity;
-use crate::rnn::common::receiver::Receiver;
-use crate::rnn::common::sender::Sender;
 use crate::rnn::common::signal_msg::SignalMessage;
 use crate::rnn::common::spec_type::SpecificationType;
 use crate::rnn::common::specialized::Specialized;
@@ -25,7 +24,7 @@ pub struct Synapse {
     max_capacity: i16,
     current_capacity: i16,
     regeneration_amount: i16,
-    collector: Option<Rc<RefCell<dyn Receiver>>>,
+    collector: Option<Rc<RefCell<dyn Component>>>,
 }
 
 impl Synapse {
@@ -49,7 +48,7 @@ impl Synapse {
     }
 }
 
-impl Receiver for Synapse {
+impl Component for Synapse {
     fn receive(&mut self, signal_msg: Box<SignalMessage>) {
         let SignalMessage(signal, _) = *signal_msg;
         let new_signal = min(signal, self.current_capacity);
@@ -63,14 +62,24 @@ impl Receiver for Synapse {
 
         self.send(new_signal);
     }
-}
 
-impl Sender for Synapse {
     fn send(&self, signal: i16) {
         self.collector.as_ref().map(|d| {
             d.borrow_mut()
                 .receive(Box::new(SignalMessage(signal, Box::new(self.get_id()))))
         });
+    }
+
+    fn get_container(&self) -> Option<Rc<RefCell<dyn Container>>> {
+        self.container.borrow().upgrade()
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }
 
@@ -95,7 +104,7 @@ impl Connectable for Synapse {
 
 impl Specialized for Synapse {
     fn get_spec_type(&self) -> SpecificationType {
-        SpecificationType::Acceptor
+        SpecificationType::Synapse
     }
 }
 

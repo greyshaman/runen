@@ -2,9 +2,9 @@ use std::error::Error;
 
 use regex::Regex;
 
-use super::{group_type::GroupType, rnn_error::RnnError, spec_type::SpecificationType};
+use super::{rnn_error::RnnError, spec_type::SpecificationType};
 
-fn is_match_to_regexp(sample: &str, rex_pattern: &str) -> bool {
+pub fn is_match_to_regexp(sample: &str, rex_pattern: &str) -> bool {
     Regex::new(rex_pattern).is_ok_and(|rex| rex.is_match(sample))
 }
 
@@ -15,12 +15,17 @@ pub fn gen_id_by_spec_type(
     my_spec_type: &SpecificationType,
 ) -> Result<String, Box<dyn Error>> {
     let (specification_prefix, regex_pattern) = match my_spec_type {
-        SpecificationType::Acceptor => ('A', r"^M\d+Z\d+$"),
-        SpecificationType::Collector => ('C', r"^M\d+Z\d+$"),
-        SpecificationType::Aggregator => ('G', r"^M\d+Z\d+$"),
-        SpecificationType::Emitter => ('E', r"^M\d+Z\d+$"),
-        SpecificationType::Media => ('M', r"^$"),
-        SpecificationType::Container => ('Z', r"^M\d+$"),
+        SpecificationType::Synapse => ('A', r"^M\d+Z\d+$"),
+        SpecificationType::Dendrite => ('C', r"^M\d+Z\d+$"),
+        SpecificationType::Neurosoma => ('G', r"^M\d+Z\d+$"),
+        SpecificationType::Axon => ('E', r"^M\d+Z\d+$"),
+        SpecificationType::InputTerminator => ('I', r"^M\d+Y\d+$"),
+        SpecificationType::OutputTerminator => ('O', r"^M\d+X\d+$"),
+        SpecificationType::Neuron => ('Z', r"^M\d+$"),
+        SpecificationType::Neuron => ('Z', r"^M\d+$"),
+        SpecificationType::Receptor => ('Y', r"^M\d+$"),
+        SpecificationType::Activator => ('X', r"^M\d+$"),
+        SpecificationType::Network => ('M', r"^$"),
     };
 
     if !is_match_to_regexp(container_id, &regex_pattern) {
@@ -30,24 +35,6 @@ pub fn gen_id_by_spec_type(
         "{}{}{}",
         container_id, specification_prefix, entity_num_id
     ))
-}
-
-pub fn gen_id_by_group_type(
-    parent_id: &str,
-    entry_num_id: usize,
-    group_type: &GroupType,
-) -> Result<String, Box<dyn Error>> {
-    let regexp_pattern = r"^M\d+$";
-    if !is_match_to_regexp(parent_id, &regexp_pattern) {
-        return Err(Box::new(RnnError::NotSupportedArgValue));
-    }
-
-    let group_prefix = match group_type {
-        GroupType::Neural => 'Z',
-        GroupType::Cyber => 'Y',
-    };
-
-    Ok(format!("{}{}{}", parent_id, group_prefix, entry_num_id))
 }
 
 /// Extract number fraction of component Id
@@ -62,11 +49,11 @@ pub fn get_component_id_fraction(
     }
 
     let r_pattern: &str = match spec_type {
-        SpecificationType::Acceptor => r"^M\d+Z\d+A(\d+)$",
-        SpecificationType::Collector => r"^M\d+Z\d+C(\d+)$",
-        SpecificationType::Aggregator => r"^M\d+Z\d+G(\d+)$",
-        SpecificationType::Emitter => r"^M\d+Z\d+E(\d+)$",
-        SpecificationType::Container => r"^M\d+Z(\d+)$",
+        SpecificationType::Synapse => r"^M\d+Z\d+A(\d+)$",
+        SpecificationType::Dendrite => r"^M\d+Z\d+C(\d+)$",
+        SpecificationType::Neurosoma => r"^M\d+Z\d+G(\d+)$",
+        SpecificationType::Axon => r"^M\d+Z\d+E(\d+)$",
+        SpecificationType::Neuron => r"^M\d+Z(\d+)$",
         _ => return Err(Box::new(RnnError::NotSupportedArgValue)),
     };
 
@@ -83,7 +70,7 @@ pub fn get_component_id_fraction(
 }
 
 pub fn check_id_on_siblings(id: &str, spec_type: &SpecificationType) -> bool {
-    spec_type.is_multiple_allowed()
+    spec_type.is_siblings_allowed()
         || get_component_id_fraction(id, spec_type).is_ok_and(|id_fraction| id_fraction == 0)
 }
 
@@ -133,7 +120,7 @@ mod tests {
             fn should_generate_correct_id_for_initial_entity() {
                 let expected_id = "M0";
                 assert_eq!(
-                    gen_id_by_spec_type("", 0, &SpecificationType::Media)
+                    gen_id_by_spec_type("", 0, &SpecificationType::Network)
                         .unwrap()
                         .as_str(),
                     expected_id
@@ -144,7 +131,7 @@ mod tests {
             fn should_generate_correct_id_for_sequence_entity() {
                 let expected_id = "M5";
                 assert_eq!(
-                    gen_id_by_spec_type("", 5, &SpecificationType::Media)
+                    gen_id_by_spec_type("", 5, &SpecificationType::Network)
                         .unwrap()
                         .as_str(),
                     expected_id
@@ -153,7 +140,7 @@ mod tests {
 
             #[test]
             fn should_throw_error_with_incorrect_container_id_for_sequence_entity() {
-                assert!(gen_id_by_spec_type("27637263", 5, &SpecificationType::Media).is_err());
+                assert!(gen_id_by_spec_type("27637263", 5, &SpecificationType::Network).is_err());
             }
         }
 
@@ -164,7 +151,7 @@ mod tests {
             fn should_generate_correct_id_for_initial_entity() {
                 let expected_id = "M1Z0";
                 assert_eq!(
-                    gen_id_by_spec_type("M1", 0, &SpecificationType::Container)
+                    gen_id_by_spec_type("M1", 0, &SpecificationType::Neuron)
                         .unwrap()
                         .as_str(),
                     expected_id
@@ -175,7 +162,7 @@ mod tests {
             fn should_generate_correct_id_for_sequence_entity() {
                 let expected_id = "M5Z5";
                 assert_eq!(
-                    gen_id_by_spec_type("M5", 5, &SpecificationType::Container)
+                    gen_id_by_spec_type("M5", 5, &SpecificationType::Neuron)
                         .unwrap()
                         .as_str(),
                     expected_id
@@ -184,7 +171,7 @@ mod tests {
 
             #[test]
             fn should_throw_error_with_incorrect_container_id_for_sequence_entity() {
-                assert!(gen_id_by_spec_type("", 5, &SpecificationType::Container).is_err());
+                assert!(gen_id_by_spec_type("", 5, &SpecificationType::Neuron).is_err());
             }
         }
 
@@ -195,7 +182,7 @@ mod tests {
             fn should_generate_correct_id_for_initial_entity() {
                 let expected_id = "M1Z0C0";
                 assert_eq!(
-                    gen_id_by_spec_type("M1Z0", 0, &SpecificationType::Collector)
+                    gen_id_by_spec_type("M1Z0", 0, &SpecificationType::Dendrite)
                         .unwrap()
                         .as_str(),
                     expected_id
@@ -206,7 +193,7 @@ mod tests {
             fn should_generate_correct_id_for_sequence_entity() {
                 let expected_id = "M5Z5C5";
                 assert_eq!(
-                    gen_id_by_spec_type("M5Z5", 5, &SpecificationType::Collector)
+                    gen_id_by_spec_type("M5Z5", 5, &SpecificationType::Dendrite)
                         .unwrap()
                         .as_str(),
                     expected_id
@@ -215,7 +202,7 @@ mod tests {
 
             #[test]
             fn should_panic_with_incorrect_container_id_for_sequence_entity() {
-                assert!(gen_id_by_spec_type("E0", 5, &SpecificationType::Collector).is_err());
+                assert!(gen_id_by_spec_type("E0", 5, &SpecificationType::Dendrite).is_err());
             }
         }
 
@@ -226,7 +213,7 @@ mod tests {
             fn should_generate_correct_id_for_initial_entity() {
                 let expected_id = "M1Z0A0";
                 assert_eq!(
-                    gen_id_by_spec_type("M1Z0", 0, &SpecificationType::Acceptor)
+                    gen_id_by_spec_type("M1Z0", 0, &SpecificationType::Synapse)
                         .unwrap()
                         .as_str(),
                     expected_id
@@ -237,7 +224,7 @@ mod tests {
             fn should_generate_correct_id_for_sequence_entity() {
                 let expected_id = "M5Z5A5";
                 assert_eq!(
-                    gen_id_by_spec_type("M5Z5", 5, &SpecificationType::Acceptor)
+                    gen_id_by_spec_type("M5Z5", 5, &SpecificationType::Synapse)
                         .unwrap()
                         .as_str(),
                     expected_id
@@ -246,7 +233,7 @@ mod tests {
 
             #[test]
             fn should_panic_with_incorrect_container_id_for_sequence_entity() {
-                assert!(gen_id_by_spec_type("E0", 5, &SpecificationType::Acceptor).is_err());
+                assert!(gen_id_by_spec_type("E0", 5, &SpecificationType::Synapse).is_err());
             }
         }
 
@@ -257,7 +244,7 @@ mod tests {
             fn should_generate_correct_id_for_initial_entity() {
                 let expected_id = "M1Z0G0";
                 assert_eq!(
-                    gen_id_by_spec_type("M1Z0", 0, &SpecificationType::Aggregator)
+                    gen_id_by_spec_type("M1Z0", 0, &SpecificationType::Neurosoma)
                         .unwrap()
                         .as_str(),
                     expected_id
@@ -268,7 +255,7 @@ mod tests {
             fn should_generate_correct_id_for_sequence_entity() {
                 let expected_id = "M5Z5G5";
                 assert_eq!(
-                    gen_id_by_spec_type("M5Z5", 5, &SpecificationType::Aggregator)
+                    gen_id_by_spec_type("M5Z5", 5, &SpecificationType::Neurosoma)
                         .unwrap()
                         .as_str(),
                     expected_id
@@ -277,7 +264,7 @@ mod tests {
 
             #[test]
             fn should_panic_with_incorrect_container_id_for_sequence_entity() {
-                assert!(gen_id_by_spec_type("E0", 5, &SpecificationType::Aggregator).is_err());
+                assert!(gen_id_by_spec_type("E0", 5, &SpecificationType::Neurosoma).is_err());
             }
         }
 
@@ -288,7 +275,7 @@ mod tests {
             fn should_generate_correct_id_for_initial_entity() {
                 let expected_id = "M1Z0E0";
                 assert_eq!(
-                    gen_id_by_spec_type("M1Z0", 0, &SpecificationType::Emitter)
+                    gen_id_by_spec_type("M1Z0", 0, &SpecificationType::Axon)
                         .unwrap()
                         .as_str(),
                     expected_id
@@ -299,7 +286,7 @@ mod tests {
             fn should_generate_correct_id_for_sequence_entity() {
                 let expected_id = "M5Z5E5";
                 assert_eq!(
-                    gen_id_by_spec_type("M5Z5", 5, &SpecificationType::Emitter)
+                    gen_id_by_spec_type("M5Z5", 5, &SpecificationType::Axon)
                         .unwrap()
                         .as_str(),
                     expected_id
@@ -308,55 +295,7 @@ mod tests {
 
             #[test]
             fn should_panic_with_incorrect_container_id_for_sequence_entity() {
-                assert!(gen_id_by_spec_type("E0", 5, &SpecificationType::Emitter).is_err());
-            }
-        }
-    }
-
-    mod gen_id_by_group_type_test_suite {
-        use super::*;
-
-        mod for_neural {
-            use super::*;
-
-            #[test]
-            fn should_generate_correct_id_with_correct_parent_id() {
-                let parent_id = "M0";
-                let expected_id = "M0Z0";
-                assert_eq!(
-                    gen_id_by_group_type(parent_id, 0, &GroupType::Neural)
-                        .unwrap()
-                        .as_str(),
-                    expected_id
-                );
-            }
-
-            #[test]
-            fn should_generate_error_with_incorrect_parent_id() {
-                let parent_id = "U0";
-                assert!(gen_id_by_group_type(parent_id, 0, &GroupType::Neural).is_err());
-            }
-        }
-
-        mod for_cyber {
-            use super::*;
-
-            #[test]
-            fn should_generate_correct_id_with_correct_parent_id() {
-                let parent_id = "M0";
-                let expected_id = "M0Y0";
-                assert_eq!(
-                    gen_id_by_group_type(parent_id, 0, &GroupType::Cyber)
-                        .unwrap()
-                        .as_str(),
-                    expected_id
-                );
-            }
-
-            #[test]
-            fn should_generate_error_with_incorrect_parent_id() {
-                let parent_id = "U0";
-                assert!(gen_id_by_group_type(parent_id, 0, &GroupType::Cyber).is_err());
+                assert!(gen_id_by_spec_type("E0", 5, &SpecificationType::Axon).is_err());
             }
         }
     }
@@ -370,14 +309,14 @@ mod tests {
             #[test]
             fn positive_test() {
                 assert_eq!(
-                    get_component_id_fraction("M0Z1", &SpecificationType::Container).unwrap(),
+                    get_component_id_fraction("M0Z1", &SpecificationType::Neuron).unwrap(),
                     1
                 );
             }
 
             #[test]
             fn negative_test() {
-                assert!(get_component_id_fraction("M1", &SpecificationType::Container).is_err());
+                assert!(get_component_id_fraction("M1", &SpecificationType::Neuron).is_err());
             }
         }
 
@@ -387,14 +326,14 @@ mod tests {
             #[test]
             fn positive_test() {
                 assert_eq!(
-                    get_component_id_fraction("M0Z1A12", &SpecificationType::Acceptor).unwrap(),
+                    get_component_id_fraction("M0Z1A12", &SpecificationType::Synapse).unwrap(),
                     12
                 );
             }
 
             #[test]
             fn negative_test() {
-                assert!(get_component_id_fraction("M1Z3X4", &SpecificationType::Acceptor).is_err());
+                assert!(get_component_id_fraction("M1Z3X4", &SpecificationType::Synapse).is_err());
             }
         }
 
@@ -404,16 +343,14 @@ mod tests {
             #[test]
             fn positive_test() {
                 assert_eq!(
-                    get_component_id_fraction("M0Z1C12", &SpecificationType::Collector).unwrap(),
+                    get_component_id_fraction("M0Z1C12", &SpecificationType::Dendrite).unwrap(),
                     12
                 );
             }
 
             #[test]
             fn negative_test() {
-                assert!(
-                    get_component_id_fraction("M1Z3X4", &SpecificationType::Collector).is_err()
-                );
+                assert!(get_component_id_fraction("M1Z3X4", &SpecificationType::Dendrite).is_err());
             }
         }
 
@@ -423,7 +360,7 @@ mod tests {
             #[test]
             fn positive_test() {
                 assert_eq!(
-                    get_component_id_fraction("M0Z1G12", &SpecificationType::Aggregator).unwrap(),
+                    get_component_id_fraction("M0Z1G12", &SpecificationType::Neurosoma).unwrap(),
                     12
                 );
             }
@@ -431,7 +368,7 @@ mod tests {
             #[test]
             fn negative_test() {
                 assert!(
-                    get_component_id_fraction("M1Z3X4", &SpecificationType::Aggregator).is_err()
+                    get_component_id_fraction("M1Z3X4", &SpecificationType::Neurosoma).is_err()
                 );
             }
         }
@@ -442,14 +379,14 @@ mod tests {
             #[test]
             fn positive_test() {
                 assert_eq!(
-                    get_component_id_fraction("M0Z1E12", &SpecificationType::Emitter).unwrap(),
+                    get_component_id_fraction("M0Z1E12", &SpecificationType::Axon).unwrap(),
                     12
                 );
             }
 
             #[test]
             fn negative_test() {
-                assert!(get_component_id_fraction("M1Z3X4", &SpecificationType::Emitter).is_err());
+                assert!(get_component_id_fraction("M1Z3X4", &SpecificationType::Axon).is_err());
             }
         }
     }
@@ -459,18 +396,18 @@ mod tests {
 
         #[test]
         fn siblings_accepted_for_first_acceptor() {
-            assert!(check_id_on_siblings("M1Z3A0", &SpecificationType::Acceptor));
+            assert!(check_id_on_siblings("M1Z3A0", &SpecificationType::Synapse));
         }
 
         #[test]
         fn siblings_accepted_for_next_acceptor() {
-            assert!(check_id_on_siblings("M1Z3A1", &SpecificationType::Acceptor));
+            assert!(check_id_on_siblings("M1Z3A1", &SpecificationType::Synapse));
         }
         #[test]
         fn siblings_accepted_for_first_aggregator() {
             assert!(check_id_on_siblings(
                 "M1Z3G0",
-                &SpecificationType::Aggregator
+                &SpecificationType::Neurosoma
             ));
         }
 
@@ -478,7 +415,7 @@ mod tests {
         fn siblings_denied_for_next_aggregator() {
             assert!(!check_id_on_siblings(
                 "M1Z3G1",
-                &SpecificationType::Aggregator
+                &SpecificationType::Neurosoma
             ));
         }
     }

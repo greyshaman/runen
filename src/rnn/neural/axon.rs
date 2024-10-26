@@ -1,14 +1,16 @@
 use std::cell::RefCell;
+use std::cmp::max;
 use std::collections::HashMap;
+use std::error::Error;
 use std::rc::Rc;
 use std::rc::Weak;
 
+use crate::rnn::common::component::Component;
 use crate::rnn::common::connectable::Connectable;
 use crate::rnn::common::container::Container;
 use crate::rnn::common::emitter::Emitter;
 use crate::rnn::common::identity::Identity;
-use crate::rnn::common::receiver::Receiver;
-use crate::rnn::common::sender::Sender;
+use crate::rnn::common::rnn_error::RnnError;
 use crate::rnn::common::signal_msg::SignalMessage;
 use crate::rnn::common::spec_type::SpecificationType;
 use crate::rnn::common::specialized::Specialized;
@@ -19,27 +21,34 @@ use crate::rnn::common::specialized::Specialized;
 pub struct Axon {
     id: String,
     container: RefCell<Weak<RefCell<dyn Container>>>,
-    acceptors: RefCell<HashMap<String, Weak<RefCell<dyn Receiver>>>>,
+    acceptors: RefCell<HashMap<String, Weak<RefCell<dyn Component>>>>,
 }
 
 impl Axon {
-    pub fn new(id: &str, container_ref: &Rc<RefCell<dyn Container>>) -> Axon {
-        Axon {
+    pub fn new(
+        id: &str,
+        container_ref: &Rc<RefCell<dyn Container>>,
+    ) -> Result<Axon, Box<dyn Error>> {
+        let spec_type = SpecificationType::Axon;
+
+        if !spec_type.is_id_valid(id) {
+            return Err(Box::new(RnnError::NotSupportedArgValue));
+        }
+
+        Ok(Axon {
             id: String::from(id),
             container: RefCell::new(Rc::downgrade(&container_ref)),
             acceptors: RefCell::new(HashMap::new()),
-        }
+        })
     }
 }
 
-impl Receiver for Axon {
+impl Component for Axon {
     fn receive(&mut self, signal_msg: Box<SignalMessage>) {
         let SignalMessage(signal, _) = *signal_msg;
-        self.send(signal);
+        self.send(max(signal, 0));
     }
-}
 
-impl Sender for Axon {
     fn send(&self, signal: i16) {
         // FIXME use channels to improve signal sending
         for (id, acceptor_weak) in self.acceptors.borrow_mut().iter() {
@@ -55,6 +64,18 @@ impl Sender for Axon {
                     Some(())
                 });
         }
+    }
+
+    fn get_container(&self) -> Option<Rc<RefCell<dyn Container>>> {
+        self.container.borrow().upgrade()
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }
 
@@ -86,7 +107,7 @@ impl Connectable for Axon {
 
 impl Specialized for Axon {
     fn get_spec_type(&self) -> SpecificationType {
-        SpecificationType::Emitter
+        SpecificationType::Axon
     }
 }
 
@@ -100,76 +121,133 @@ impl Emitter for Axon {}
 
 #[cfg(test)]
 mod tests {
-    use std::collections::BTreeMap;
+    use mock::MockComponent;
+
+    use crate::rnn::{common::media::Media, layouts::network::Network};
 
     use super::*;
 
-    struct MockNeuron {
-        id: String,
-        components: BTreeMap<String, Rc<RefCell<dyn Receiver>>>,
-        my_ref_opt: Option<Rc<RefCell<dyn Container>>>,
-    }
+    mod mock {
+        use super::*;
 
-    impl MockNeuron {
-        pub fn set_my_ref(&mut self, my_ref: &Rc<RefCell<dyn Container>>) {
-            self.my_ref_opt = Some(Rc::clone(my_ref));
+        #[derive(Debug, Default)]
+        pub struct MockComponent {
+            id: String,
+            pub signal: i16,
+            pub source_id: String,
+        }
+
+        impl Component for MockComponent {
+            fn receive(&mut self, signal_msg: Box<SignalMessage>) {
+                let SignalMessage(signal, source_id) = *signal_msg;
+                self.signal = signal;
+                self.source_id = *source_id;
+            }
+
+            fn send(&self, _signal: i16) {
+                unimplemented!()
+            }
+
+            fn get_container(&self) -> Option<Rc<RefCell<dyn Container>>> {
+                None
+            }
+
+            fn as_any(&self) -> &dyn std::any::Any {
+                self
+            }
+
+            fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
+                self
+            }
+        }
+
+        impl Identity for MockComponent {
+            fn get_id(&self) -> String {
+                self.id.clone()
+            }
+        }
+
+        impl Connectable for MockComponent {}
+
+        impl Specialized for MockComponent {
+            fn get_spec_type(&self) -> SpecificationType {
+                SpecificationType::Synapse
+            }
         }
     }
 
-    // impl Container for MockNeuron {
-    //   fn create_acceptor(
-    //       &mut self,
-    //       max_capacity: Option<i16>,
-    //       regeneration_amount: Option<i16>,
-    //     ) {
-    //       todo!()
-    //   }
+    fn fixture_new_axon() -> (Box<Rc<RefCell<dyn Media>>>, Box<Rc<RefCell<dyn Component>>>) {
+        let net: Rc<RefCell<dyn Media>> = Rc::new(RefCell::new(Network::new()));
 
-    //   fn create_collector(&mut self, weight: Option<i16>) {
-    //       todo!()
-    //   }
+        let neuron = net
+            .borrow_mut()
+            .create_container(&SpecificationType::Neuron, &net)
+            .unwrap();
 
-    //   fn create_aggregator(&mut self) {
-    //       todo!()
-    //   }
+        let axon = neuron.borrow_mut().create_emitter().unwrap();
 
-    //   fn create_emitter(&mut self) {
-    //     let axon_id = "Z0E0".to_string();
-    //     self.components.insert(
-    //       axon_id.clone(),
-    //       Rc::new(RefCell::new(Axon::new(&axon_id, &self.my_ref_opt.unwrap()))));
-    //   }
-
-    //   fn get_component(&self, id: &str) -> Option<&Rc<RefCell<dyn Receiver>>> {
-    //       todo!()
-    //   }
-
-    //   fn remove_component(&mut self, id: &str) -> Result<(), Box<dyn std::error::Error>> {
-    //       todo!()
-    //   }
-
-    //   fn as_any(&self) -> &dyn std::any::Any {
-    //       todo!()
-    //   }
-
-    //   fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
-    //       todo!()
-    //   }
-    // }
-
-    struct MockAcceptor {
-        accepted_signal: i16,
+        (Box::new(net), Box::new(axon))
     }
 
-    // #[test]
-    // fn test_can_receive_positive_signal() {
-    //   let mut neuron = Rc::new(
-    //     RefCell::new(
-    //       MockNeuron { id: String::from("Z0"), components: BTreeMap::new(), my_ref_opt: None }
-    //     )
-    //   );
-    //   // neuron.borrow_mut().set_my_ref(&Rc::clone(&neuron));
-    //   let t = 1;
-    //   assert_eq!(t, 1);
-    // }
+    #[test]
+    fn can_send_only_positive_signal_with_save_value_as_received_to_all_connected_synapses() {
+        let (_net, axon_boxed) = fixture_new_axon();
+        let synapse1: Rc<RefCell<dyn Component>> = Rc::new(RefCell::new(MockComponent::default()));
+        let synapse2: Rc<RefCell<dyn Component>> = Rc::new(RefCell::new(MockComponent::default()));
+
+        {
+            let binding = axon_boxed.borrow();
+            let axon = binding.as_any().downcast_ref::<Axon>().unwrap();
+
+            axon.acceptors
+                .borrow_mut()
+                .insert("1".to_string(), Rc::downgrade(&synapse1));
+            axon.acceptors
+                .borrow_mut()
+                .insert("2".to_string(), Rc::downgrade(&synapse2));
+        }
+
+        let mut binding = axon_boxed.borrow_mut();
+        let axon_mut = binding.as_mut_any().downcast_mut::<Axon>().unwrap();
+        axon_mut.receive(Box::new(SignalMessage(5, Box::new(axon_mut.get_id()))));
+
+        assert_eq!(
+            synapse1
+                .borrow()
+                .as_any()
+                .downcast_ref::<MockComponent>()
+                .unwrap()
+                .signal,
+            5
+        );
+        assert_eq!(
+            synapse2
+                .borrow()
+                .as_any()
+                .downcast_ref::<MockComponent>()
+                .unwrap()
+                .signal,
+            5
+        );
+
+        axon_mut.receive(Box::new(SignalMessage(-5, Box::new(axon_mut.get_id()))));
+        assert_eq!(
+            synapse1
+                .borrow()
+                .as_any()
+                .downcast_ref::<MockComponent>()
+                .unwrap()
+                .signal,
+            0
+        );
+        assert_eq!(
+            synapse2
+                .borrow()
+                .as_any()
+                .downcast_ref::<MockComponent>()
+                .unwrap()
+                .signal,
+            0
+        );
+    }
 }

@@ -4,11 +4,10 @@ use std::rc::Weak;
 use std::{collections::HashSet, rc::Rc};
 
 use crate::rnn::common::aggregator::Aggregator;
+use crate::rnn::common::component::Component;
 use crate::rnn::common::connectable::Connectable;
 use crate::rnn::common::container::Container;
 use crate::rnn::common::identity::Identity;
-use crate::rnn::common::receiver::Receiver;
-use crate::rnn::common::sender::Sender;
 use crate::rnn::common::signal_msg::SignalMessage;
 use crate::rnn::common::spec_type::SpecificationType;
 use crate::rnn::common::specialized::Specialized;
@@ -27,7 +26,7 @@ pub struct Neurosoma {
     /// when a repeated signal is received from any
     /// of these collectors.
     reported_collectors: HashSet<String>,
-    emitter: Option<Rc<RefCell<dyn Receiver>>>,
+    emitter: Option<Rc<RefCell<dyn Component>>>,
     accumulator: i16,
 }
 
@@ -56,7 +55,7 @@ impl Neurosoma {
     }
 }
 
-impl Receiver for Neurosoma {
+impl Component for Neurosoma {
     fn receive(&mut self, signal_msg: Box<SignalMessage>) {
         let SignalMessage(signal, boxed_source_id) = *signal_msg;
         let collector_id = *boxed_source_id;
@@ -76,15 +75,25 @@ impl Receiver for Neurosoma {
             self.reported_collectors.insert(collector_id);
         }
     }
-}
 
-impl Sender for Neurosoma {
     fn send(&self, signal: i16) {
         self.emitter.as_ref().map(|emitter_rc| {
             emitter_rc
                 .borrow_mut()
                 .receive(Box::new(SignalMessage(signal, Box::new(self.get_id()))));
         });
+    }
+
+    fn get_container(&self) -> Option<Rc<RefCell<dyn Container>>> {
+        self.container.borrow().upgrade()
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
+
+    fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
+        self
     }
 }
 
@@ -107,7 +116,7 @@ impl Connectable for Neurosoma {
 
 impl Specialized for Neurosoma {
     fn get_spec_type(&self) -> SpecificationType {
-        SpecificationType::Aggregator
+        SpecificationType::Neurosoma
     }
 }
 
