@@ -1,3 +1,3 @@
 pub mod common;
-pub mod neural;
 pub mod layouts;
+pub mod neural;

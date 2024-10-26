@@ -1,6 +1,6 @@
-pub mod synapse;
+pub mod axon;
 pub mod dendrite;
 pub mod neurosoma;
-pub mod axon;
+pub mod synapse;
 
 pub mod neuron;

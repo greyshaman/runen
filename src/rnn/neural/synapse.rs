@@ -5,12 +5,12 @@ use std::rc::{Rc, Weak};
 use crate::rnn::common::acceptor::Acceptor;
 use crate::rnn::common::connectable::Connectable;
 use crate::rnn::common::container::Container;
+use crate::rnn::common::identity::Identity;
 use crate::rnn::common::receiver::Receiver;
 use crate::rnn::common::sender::Sender;
 use crate::rnn::common::signal_msg::SignalMessage;
-use crate::rnn::common::specialized::Specialized;
-use crate::rnn::common::identity::Identity;
 use crate::rnn::common::spec_type::SpecificationType;
+use crate::rnn::common::specialized::Specialized;
 
 /// The capacity of the synaptic mediator resource
 const DEFAULT_CAPACITY: i16 = 1;
@@ -20,86 +20,89 @@ const DEFAULT_CAPACITY: i16 = 1;
 /// Th Value of produced signal depended from stimulation value, capacity and weight
 #[derive(Debug)]
 pub struct Synapse {
-  id: String, // Pattern N000A00
-  container: RefCell<Weak<RefCell<dyn Container>>>,
-  max_capacity: i16,
-  current_capacity: i16,
-  regeneration_amount: i16,
-  collector: Option<Rc<RefCell<dyn Receiver>>>,
+    id: String, // Pattern N000A00
+    container: RefCell<Weak<RefCell<dyn Container>>>,
+    max_capacity: i16,
+    current_capacity: i16,
+    regeneration_amount: i16,
+    collector: Option<Rc<RefCell<dyn Receiver>>>,
 }
 
 impl Synapse {
-  pub fn new(
-    id: &str,
-    container: &Rc<RefCell<dyn Container>>,
-    capacity_opt: Option<i16>,
-    regeneration: Option<i16>
-  ) -> Synapse {
-    let max_capacity = capacity_opt.unwrap_or(DEFAULT_CAPACITY);
-    let regeneration_amount = regeneration.unwrap_or(DEFAULT_CAPACITY);
+    pub fn new(
+        id: &str,
+        container: &Rc<RefCell<dyn Container>>,
+        capacity_opt: Option<i16>,
+        regeneration: Option<i16>,
+    ) -> Synapse {
+        let max_capacity = capacity_opt.unwrap_or(DEFAULT_CAPACITY);
+        let regeneration_amount = regeneration.unwrap_or(DEFAULT_CAPACITY);
 
-    Synapse {
-      id: String::from(id),
-      container: RefCell::new(Rc::downgrade(container)),
-      max_capacity,
-      current_capacity: max_capacity,
-      collector: None,
-      regeneration_amount,
+        Synapse {
+            id: String::from(id),
+            container: RefCell::new(Rc::downgrade(container)),
+            max_capacity,
+            current_capacity: max_capacity,
+            collector: None,
+            regeneration_amount,
+        }
     }
-  }
 }
 
 impl Receiver for Synapse {
-  fn receive(&mut self, signal_msg: Box<SignalMessage>) {
-    let SignalMessage(signal, _) = *signal_msg;
-    let new_signal = min(signal, self.current_capacity);
+    fn receive(&mut self, signal_msg: Box<SignalMessage>) {
+        let SignalMessage(signal, _) = *signal_msg;
+        let new_signal = min(signal, self.current_capacity);
 
-    self.current_capacity -= new_signal;
-    // regeneration mediator capacity
-    self.current_capacity += min(self.current_capacity + self.regeneration_amount, self.max_capacity);
+        self.current_capacity -= new_signal;
+        // regeneration mediator capacity
+        self.current_capacity += min(
+            self.current_capacity + self.regeneration_amount,
+            self.max_capacity,
+        );
 
-    self.send(new_signal);
-  }
+        self.send(new_signal);
+    }
 }
 
 impl Sender for Synapse {
-  fn send(&self, signal: i16) {
-    self.collector.as_ref().map(|d| {
-      d.borrow_mut().receive(
-        Box::new(SignalMessage(signal, Box::new(self.get_id())))
-      )
-    });
-  }
+    fn send(&self, signal: i16) {
+        self.collector.as_ref().map(|d| {
+            d.borrow_mut()
+                .receive(Box::new(SignalMessage(signal, Box::new(self.get_id()))))
+        });
+    }
 }
 
 impl Connectable for Synapse {
-  /// Connect to collector
-  fn connect(&mut self, party_id: &str) {
-    self.collector = self.container
-      .borrow()
-      .upgrade()
-      .unwrap()
-      .borrow()
-      .get_component(party_id)
-      .map(|collector_rc| Rc::clone(&collector_rc));
-  }
+    /// Connect to collector
+    fn connect(&mut self, party_id: &str) {
+        self.collector = self
+            .container
+            .borrow()
+            .upgrade()
+            .unwrap()
+            .borrow()
+            .get_component(party_id)
+            .map(|collector_rc| Rc::clone(&collector_rc));
+    }
 
-  /// Disconnect from collector
-  fn disconnect(&mut self, _party_id: &str) {
-      self.collector = None;
-  }
+    /// Disconnect from collector
+    fn disconnect(&mut self, _party_id: &str) {
+        self.collector = None;
+    }
 }
 
 impl Specialized for Synapse {
-  fn get_spec_type(&self) -> SpecificationType {
-    SpecificationType::Acceptor
-  }
+    fn get_spec_type(&self) -> SpecificationType {
+        SpecificationType::Acceptor
+    }
 }
 
 impl Identity for Synapse {
-  fn get_id(&self) -> String {
-    self.id.clone()
-  }
+    fn get_id(&self) -> String {
+        self.id.clone()
+    }
 }
 
 impl Acceptor for Synapse {}

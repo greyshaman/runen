@@ -3,26 +3,26 @@ use std::error::Error;
 /// Runen library errors
 #[derive(Debug)]
 pub enum RnnError {
-  /// Already has key when attempt insert element into Map or Set
-  OccupiedKey,
+    /// Already has key when attempt insert element into Map or Set
+    OccupiedKey,
 
-  /// Not found key when try to use it to access element in Map or Set
-  IdNotFound,
+    /// Not found key when try to use it to access element in Map or Set
+    IdNotFound,
 
-  /// Error on attempt to create unique entity with used Id
-  IdBusy,
+    /// Error on attempt to create unique entity with used Id
+    IdBusy,
 
-  /// Not found matched data by provided pattern
-  PatternNotFound,
+    /// Not found matched data by provided pattern
+    PatternNotFound,
 
-  /// Expected data not present
-  NotPresent(String),
+    /// Expected data not present
+    NotPresent(String),
 
-  /// Not supported argument value
-  NotSupportedArgValue,
+    /// Not supported argument value
+    NotSupportedArgValue,
 
-  /// Wen create entity in container which should be single
-  OnlySingleAllowed,
+    /// Wen create entity in container which should be single
+    OnlySingleAllowed,
 }
 
 impl std::fmt::Display for RnnError {
