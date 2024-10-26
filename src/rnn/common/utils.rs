@@ -67,6 +67,12 @@ pub fn get_component_id_fraction(id: &str, spec_type: &SpecificationType)
   Ok(result)
 }
 
+pub fn check_id_on_siblings(id: &str, spec_type: &SpecificationType) -> bool {
+  spec_type.is_multiple_allowed() ||
+  get_component_id_fraction(id, spec_type)
+    .is_ok_and(|id_fraction| id_fraction == 0)
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -404,5 +410,30 @@ mod tests {
         assert!(get_component_id_fraction("M1Z3X4", &SpecificationType::Emitter).is_err());
       }
     }
+  }
+
+  mod check_id_on_siblings_test_suite {
+    use super::*;
+
+    #[test]
+    fn siblings_accepted_for_first_acceptor() {
+      assert!(check_id_on_siblings("M1Z3A0", &SpecificationType::Acceptor));
+    }
+
+    #[test]
+    fn siblings_accepted_for_next_acceptor() {
+      assert!(check_id_on_siblings("M1Z3A1", &SpecificationType::Acceptor));
+    }
+    #[test]
+    fn siblings_accepted_for_first_aggregator() {
+      assert!(check_id_on_siblings("M1Z3G0", &SpecificationType::Aggregator));
+    }
+
+    #[test]
+    fn siblings_denied_for_next_aggregator() {
+      assert!(!check_id_on_siblings("M1Z3G1", &SpecificationType::Aggregator));
+    }
+
+
   }
 }

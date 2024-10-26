@@ -17,16 +17,16 @@ pub trait Container: Identity + Specialized + Grouped + Any + Debug {
     &mut self,
     max_capacity: Option<i16>,
     regeneration_amount: Option<i16>,
-  );
+  ) -> Result<Rc<RefCell<dyn Receiver>>, Box<dyn Error>>;
 
   /// Create the collector component and save it in internal memory.
-  fn create_collector(&mut self, weight: Option<i16>);
+  fn create_collector(&mut self, weight: Option<i16>) -> Result<Rc<RefCell<dyn Receiver>>, Box<dyn Error>>;
 
   /// Create the aggregator component and save it in internal memory.
-  fn create_aggregator(&mut self);
+  fn create_aggregator(&mut self) -> Result<Rc<RefCell<dyn Receiver>>, Box<dyn Error>>;
 
   /// Create the emitter component and save it in internal memory.
-  fn create_emitter(&mut self);
+  fn create_emitter(&mut self) -> Result<Rc<RefCell<dyn Receiver>>, Box<dyn Error>>;
 
   /// Returns the component based on its ID.
   fn get_component(&self, id: &str) -> Option<&Rc<RefCell<dyn Receiver>>>;

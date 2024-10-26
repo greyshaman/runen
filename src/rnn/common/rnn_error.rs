@@ -20,6 +20,9 @@ pub enum RnnError {
 
   /// Not supported argument value
   NotSupportedArgValue,
+
+  /// Wen create entity in container which should be single
+  OnlySingleAllowed,
 }
 
 impl std::fmt::Display for RnnError {
