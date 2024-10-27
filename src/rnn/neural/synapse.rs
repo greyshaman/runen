@@ -119,8 +119,6 @@ impl Acceptor for Synapse {}
 
 #[cfg(test)]
 mod tests {
-    use std::boxed;
-
     use crate::rnn::common::media::Media;
     use crate::rnn::layouts::network::Network;
     use crate::rnn::tests::mock::mocks::MockComponent;
@@ -174,6 +172,37 @@ mod tests {
                 .downcast_ref::<MockComponent>()
                 .unwrap();
             assert_eq!(mock_collector.signal, 0);
+        }
+    }
+
+    #[test]
+    fn capacity_relaxation() {
+        let (_net, boxed_synapse) = fixture_new_synapse(Some(10), Some(2));
+        let collector: Rc<RefCell<dyn Component>> = Rc::new(RefCell::new(MockComponent::default()));
+
+        let mut component = boxed_synapse.borrow_mut();
+        let synapse = component.as_mut_any().downcast_mut::<Synapse>().unwrap();
+
+        synapse.collector = Some(Rc::clone(&collector));
+
+        {
+            synapse.receive(Box::new(SignalMessage(10, Box::new(synapse.get_id()))));
+            let mock_collector = collector.borrow();
+            let mock_collector = mock_collector
+                .as_any()
+                .downcast_ref::<MockComponent>()
+                .unwrap();
+            assert_eq!(mock_collector.signal, 10);
+        }
+
+        {
+            synapse.receive(Box::new(SignalMessage(10, Box::new(synapse.get_id()))));
+            let mock_collector = collector.borrow();
+            let mock_collector = mock_collector
+                .as_any()
+                .downcast_ref::<MockComponent>()
+                .unwrap();
+            assert_eq!(mock_collector.signal, 2);
         }
     }
 }
