@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::cmp::max;
 use std::rc::{Rc, Weak};
 
 use crate::rnn::common::collector::Collector;
@@ -39,6 +40,7 @@ impl Dendrite {
 impl Component for Dendrite {
     fn receive(&mut self, signal_msg: Box<SignalMessage>) {
         let SignalMessage(signal, _) = *signal_msg;
+        let signal = max(signal, 0);
         let new_signal = self.weight * signal;
 
         self.send(new_signal);
@@ -95,3 +97,123 @@ impl Identity for Dendrite {
 }
 
 impl Collector for Dendrite {}
+
+#[cfg(test)]
+mod tests {
+    use crate::rnn::common::media::Media;
+    use crate::rnn::layouts::network::Network;
+    use crate::rnn::tests::mock::mocks::MockComponent;
+
+    use super::*;
+
+    fn fixture_new_dendrite(
+        weight: Option<i16>,
+    ) -> (Box<Rc<RefCell<dyn Media>>>, Box<Rc<RefCell<dyn Component>>>) {
+        let net: Rc<RefCell<dyn Media>> = Rc::new(RefCell::new(Network::new()));
+
+        let neuron = net
+            .borrow_mut()
+            .create_container(&SpecificationType::Neuron, &net)
+            .unwrap();
+
+        let dendrite = neuron.borrow_mut().create_collector(weight).unwrap();
+
+        (Box::new(net), Box::new(dendrite))
+    }
+
+    #[test]
+    fn should_accept_incoming_positive_input_signal() {
+        let (_net, boxed_dendrite) = fixture_new_dendrite(None);
+        let neurosoma_rc: Rc<RefCell<dyn Component>> =
+            Rc::new(RefCell::new(MockComponent::default()));
+
+        let mut component = boxed_dendrite.borrow_mut();
+        let dendrite = component.as_mut_any().downcast_mut::<Dendrite>().unwrap();
+
+        dendrite.aggregator = Some(Rc::clone(&neurosoma_rc));
+
+        {
+            dendrite.receive(Box::new(SignalMessage(3, Box::new(dendrite.get_id()))));
+            let mock_neurosoma = neurosoma_rc.borrow();
+            let mock_neurosoma = mock_neurosoma
+                .as_any()
+                .downcast_ref::<MockComponent>()
+                .unwrap();
+            assert_eq!(mock_neurosoma.signal, 3);
+        }
+
+        {
+            dendrite.receive(Box::new(SignalMessage(-3, Box::new(dendrite.get_id()))));
+            let mock_neurosoma = neurosoma_rc.borrow();
+            let mock_neurosoma = mock_neurosoma
+                .as_any()
+                .downcast_ref::<MockComponent>()
+                .unwrap();
+            assert_eq!(mock_neurosoma.signal, 0);
+        }
+    }
+
+    #[test]
+    fn should_gain_incoming_positive_input_signal() {
+        let (_net, boxed_dendrite) = fixture_new_dendrite(Some(5));
+        let neurosoma_rc: Rc<RefCell<dyn Component>> =
+            Rc::new(RefCell::new(MockComponent::default()));
+
+        let mut component = boxed_dendrite.borrow_mut();
+        let dendrite = component.as_mut_any().downcast_mut::<Dendrite>().unwrap();
+
+        dendrite.aggregator = Some(Rc::clone(&neurosoma_rc));
+
+        {
+            dendrite.receive(Box::new(SignalMessage(1, Box::new(dendrite.get_id()))));
+            let mock_neurosoma = neurosoma_rc.borrow();
+            let mock_neurosoma = mock_neurosoma
+                .as_any()
+                .downcast_ref::<MockComponent>()
+                .unwrap();
+            assert_eq!(mock_neurosoma.signal, 5);
+        }
+
+        {
+            dendrite.receive(Box::new(SignalMessage(-1, Box::new(dendrite.get_id()))));
+            let mock_neurosoma = neurosoma_rc.borrow();
+            let mock_neurosoma = mock_neurosoma
+                .as_any()
+                .downcast_ref::<MockComponent>()
+                .unwrap();
+            assert_eq!(mock_neurosoma.signal, 0);
+        }
+    }
+
+    #[test]
+    fn should_produce_inhibitory_signal_based_on_incoming_positive_input_signal() {
+        let (_net, boxed_dendrite) = fixture_new_dendrite(Some(-2));
+        let neurosoma_rc: Rc<RefCell<dyn Component>> =
+            Rc::new(RefCell::new(MockComponent::default()));
+
+        let mut component = boxed_dendrite.borrow_mut();
+        let dendrite = component.as_mut_any().downcast_mut::<Dendrite>().unwrap();
+
+        dendrite.aggregator = Some(Rc::clone(&neurosoma_rc));
+
+        {
+            dendrite.receive(Box::new(SignalMessage(5, Box::new(dendrite.get_id()))));
+            let mock_neurosoma = neurosoma_rc.borrow();
+            let mock_neurosoma = mock_neurosoma
+                .as_any()
+                .downcast_ref::<MockComponent>()
+                .unwrap();
+            assert_eq!(mock_neurosoma.signal, -10);
+        }
+
+        {
+            dendrite.receive(Box::new(SignalMessage(-5, Box::new(dendrite.get_id()))));
+            let mock_neurosoma = neurosoma_rc.borrow();
+            let mock_neurosoma = mock_neurosoma
+                .as_any()
+                .downcast_ref::<MockComponent>()
+                .unwrap();
+            assert_eq!(mock_neurosoma.signal, 0);
+        }
+    }
+}
