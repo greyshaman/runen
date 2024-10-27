@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::cmp::min;
+use std::cmp::{max, min};
 use std::rc::{Rc, Weak};
 
 use crate::rnn::common::acceptor::Acceptor;
@@ -51,6 +51,7 @@ impl Synapse {
 impl Component for Synapse {
     fn receive(&mut self, signal_msg: Box<SignalMessage>) {
         let SignalMessage(signal, _) = *signal_msg;
+        let signal = max(signal, 0);
         let new_signal = min(signal, self.current_capacity);
 
         self.current_capacity -= new_signal;
@@ -150,19 +151,29 @@ mod tests {
         let (_net, boxed_synapse) = fixture_new_synapse(None, None);
         let collector: Rc<RefCell<dyn Component>> = Rc::new(RefCell::new(MockComponent::default()));
 
-        {
-            let mut component = boxed_synapse.borrow_mut();
-            let mut synapse = component.as_mut_any().downcast_mut::<Synapse>().unwrap();
+        let mut component = boxed_synapse.borrow_mut();
+        let synapse = component.as_mut_any().downcast_mut::<Synapse>().unwrap();
 
-            synapse.collector = Some(Rc::clone(&collector));
+        synapse.collector = Some(Rc::clone(&collector));
+
+        {
             synapse.receive(Box::new(SignalMessage(3, Box::new(synapse.get_id()))));
+            let mock_collector = collector.borrow();
+            let mock_collector = mock_collector
+                .as_any()
+                .downcast_ref::<MockComponent>()
+                .unwrap();
+            assert_eq!(mock_collector.signal, 1);
         }
 
-        let mock_collector = collector.borrow();
-        let mock_collector = mock_collector
-            .as_any()
-            .downcast_ref::<MockComponent>()
-            .unwrap();
-        assert_eq!(mock_collector.signal, 1)
+        {
+            synapse.receive(Box::new(SignalMessage(-3, Box::new(synapse.get_id()))));
+            let mock_collector = collector.borrow();
+            let mock_collector = mock_collector
+                .as_any()
+                .downcast_ref::<MockComponent>()
+                .unwrap();
+            assert_eq!(mock_collector.signal, 0);
+        }
     }
 }
