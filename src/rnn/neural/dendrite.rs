@@ -1,6 +1,10 @@
 use std::cell::RefCell;
 use std::cmp::max;
 use std::rc::{Rc, Weak};
+use std::any::Any;
+
+use as_any::AsAny;
+use as_any_derive::AsAny;
 
 use crate::rnn::common::collector::Collector;
 use crate::rnn::common::component::Component;
@@ -16,7 +20,7 @@ const DEFAULT_WEIGHT: i16 = 1;
 /// The Dendrite is model of neuron's part
 /// It is receive signal from synapse, weighting it and
 /// retransmit to neurosoma as aggregator
-#[derive(Debug)]
+#[derive(Debug, AsAny)]
 pub struct Dendrite {
     id: String,
     container: RefCell<Weak<RefCell<dyn Container>>>,
@@ -56,14 +60,6 @@ impl Component for Dendrite {
 
     fn get_container(&self) -> Option<Rc<RefCell<dyn Container>>> {
         self.container.borrow().upgrade()
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
-        self
     }
 }
 

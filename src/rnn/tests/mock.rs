@@ -1,5 +1,9 @@
 pub mod mocks {
     use std::{cell::RefCell, rc::Rc};
+    use std::any::Any;
+
+    use as_any::AsAny;
+    use as_any_derive::AsAny;
 
     use crate::rnn::common::component::Component;
     use crate::rnn::common::connectable::Connectable;
@@ -9,7 +13,7 @@ pub mod mocks {
     use crate::rnn::common::spec_type::SpecificationType;
     use crate::rnn::common::specialized::Specialized;
 
-    #[derive(Debug, Default)]
+    #[derive(Debug, Default, AsAny)]
     pub struct MockComponent {
         id: String,
         pub signal: i16,
@@ -29,14 +33,6 @@ pub mod mocks {
 
         fn get_container(&self) -> Option<Rc<RefCell<dyn Container>>> {
             None
-        }
-
-        fn as_any(&self) -> &dyn std::any::Any {
-            self
-        }
-
-        fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
-            self
         }
     }
 

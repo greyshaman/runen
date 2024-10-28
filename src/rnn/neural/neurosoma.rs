@@ -2,6 +2,10 @@ use std::cell::RefCell;
 use std::cmp::max;
 use std::rc::Weak;
 use std::{collections::HashSet, rc::Rc};
+use std::any::Any;
+
+use as_any::AsAny;
+use as_any_derive::AsAny;
 
 use crate::rnn::common::aggregator::Aggregator;
 use crate::rnn::common::component::Component;
@@ -16,7 +20,7 @@ use crate::rnn::common::specialized::Specialized;
 /// the dendrites and sends the resulting signal down
 /// the axon when it receives repeated signals from one
 /// of the dendrites.
-#[derive(Debug)]
+#[derive(Debug, AsAny)]
 pub struct Neurosoma {
     id: String,
     container: RefCell<Weak<RefCell<dyn Container>>>,
@@ -87,14 +91,6 @@ impl Component for Neurosoma {
     fn get_container(&self) -> Option<Rc<RefCell<dyn Container>>> {
         self.container.borrow().upgrade()
     }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
-        self
-    }
 }
 
 impl Connectable for Neurosoma {
@@ -127,3 +123,23 @@ impl Identity for Neurosoma {
 }
 
 impl Aggregator for Neurosoma {}
+
+#[cfg(test)]
+mod tests {
+    use crate::rnn::{common::media::Media, layouts::network::Network};
+
+    use super::*;
+
+    fn fixture_new_neurosoma() -> (Box<Rc<RefCell<dyn Media>>>, Box<Rc<RefCell<dyn Component>>>) {
+        let net: Rc<RefCell<dyn Media>> = Rc::new(RefCell::new(Network::new()));
+
+        let neuron = net
+            .borrow_mut()
+            .create_container(&SpecificationType::Neuron, &net)
+            .unwrap();
+
+        let neurosoma = neuron.borrow_mut().create_aggregator().unwrap();
+
+        (Box::new(net), Box::new(neurosoma))
+    }
+}

@@ -5,6 +5,8 @@ edition = "2021"
 authors = ["Sergey Reshetnikov <shaman@simmirra.com>"]
 
 [dependencies]
+as_any = { path = "./macros/as_any" }
+as_any_derive = { path = "./macros/as_any/as_any_derive" }
 regex = "1.11.1"
 
 [lib]

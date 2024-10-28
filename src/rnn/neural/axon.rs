@@ -4,6 +4,10 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::rc::Rc;
 use std::rc::Weak;
+use std::any::Any;
+
+use as_any::AsAny;
+use as_any_derive::AsAny;
 
 use crate::rnn::common::component::Component;
 use crate::rnn::common::connectable::Connectable;
@@ -17,7 +21,7 @@ use crate::rnn::common::specialized::Specialized;
 
 /// The Axon is able to emit a signal, which is then received
 /// by the connected Synapses.
-#[derive(Debug)]
+#[derive(Debug, AsAny)]
 pub struct Axon {
     id: String,
     container: RefCell<Weak<RefCell<dyn Container>>>,
@@ -68,14 +72,6 @@ impl Component for Axon {
 
     fn get_container(&self) -> Option<Rc<RefCell<dyn Container>>> {
         self.container.borrow().upgrade()
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
-        self
     }
 }
 

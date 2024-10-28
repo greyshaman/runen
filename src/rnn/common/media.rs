@@ -1,5 +1,7 @@
 use std::{any::Any, cell::RefCell, error::Error, rc::Rc};
 
+use as_any::AsAny;
+
 use super::{
     container::Container, identity::Identity, spec_type::SpecificationType,
     specialized::Specialized,
@@ -7,7 +9,7 @@ use super::{
 
 /// Media is a system that consists of various functional elements in containers.
 /// It manages the creation, updating, and deletion of these containers.
-pub trait Media: Identity + Specialized + Any {
+pub trait Media: Identity + Specialized + AsAny {
     /// Gets container by id
     fn get_container(&self, id: &str) -> Option<&Rc<RefCell<dyn Container>>>;
 
@@ -26,8 +28,4 @@ pub trait Media: Identity + Specialized + Any {
 
     /// Get how many container in this media
     fn len(&self) -> usize;
-
-    fn as_any(&self) -> &dyn Any;
-
-    fn as_mut_any(&mut self) -> &mut dyn Any;
 }

@@ -4,13 +4,15 @@ use std::error::Error;
 use std::fmt::Debug;
 use std::rc::Rc;
 
+use as_any::AsAny;
+
 use super::component::Component;
 use super::identity::Identity;
 use super::spec_type::SpecificationType;
 use super::specialized::Specialized;
 
 /// A substance that can contain different elements in its composition.
-pub trait Container: Identity + Specialized + Any + Debug {
+pub trait Container: Identity + Specialized + AsAny + Debug {
     /// Create the acceptor component and save it in internal memory.
     fn create_acceptor(
         &mut self,
@@ -41,10 +43,4 @@ pub trait Container: Identity + Specialized + Any + Debug {
 
     /// Returns how many components with specified spec_type have container
     fn len_by_spec_type(&self, spec_type: &SpecificationType) -> usize;
-
-    /// Reflection method
-    fn as_any(&self) -> &dyn Any;
-
-    /// Reflection method
-    fn as_mut_any(&mut self) -> &mut dyn Any;
 }

@@ -6,6 +6,10 @@ use std::collections::BTreeMap;
 use std::error::Error;
 use std::rc::Rc;
 use std::rc::Weak;
+use std::any::Any;
+
+use as_any::AsAny;
+use as_any_derive::AsAny;
 
 use crate::rnn::common::component::Component;
 use crate::rnn::common::container::Container;
@@ -23,7 +27,7 @@ use super::dendrite::Dendrite;
 use super::neurosoma::Neurosoma;
 use super::synapse::Synapse;
 
-#[derive(Debug)]
+#[derive(Debug, AsAny)]
 pub struct Neuron {
     id: String,
     network: RefCell<Weak<RefCell<dyn Media>>>,
@@ -194,14 +198,6 @@ impl Container for Neuron {
         self.components
             .remove(id)
             .map_or(Err(Box::new(RnnError::IdNotFound)), |_| Ok(()))
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
-        self
     }
 
     fn len(&self) -> usize {

@@ -4,7 +4,10 @@ use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::any::Any;
 
+use as_any::AsAny;
+use as_any_derive::AsAny;
 use regex::Regex;
 
 use crate::rnn::common::container::Container;
@@ -18,7 +21,7 @@ use crate::rnn::neural::neuron::Neuron;
 
 static mut ID_COUNTER: AtomicUsize = AtomicUsize::new(0_usize);
 
-#[derive(Debug)]
+#[derive(Debug, AsAny)]
 pub struct Network {
     id: String,
     containers: HashMap<String, Rc<RefCell<dyn Container>>>,
@@ -119,14 +122,6 @@ impl Media for Network {
 
     fn len(&self) -> usize {
         self.containers.len()
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
-        self
     }
 }
 

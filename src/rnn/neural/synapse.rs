@@ -1,6 +1,10 @@
 use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::rc::{Rc, Weak};
+use std::any::Any;
+
+use as_any::AsAny;
+use as_any_derive::AsAny;
 
 use crate::rnn::common::acceptor::Acceptor;
 use crate::rnn::common::component::Component;
@@ -17,7 +21,7 @@ const DEFAULT_CAPACITY: i16 = 1;
 /// The Synapse is model of connection between Axon and Dendrite
 /// It is accept incoming stimulation and produce signal for dendrite
 /// Th Value of produced signal depended from stimulation value, capacity and weight
-#[derive(Debug)]
+#[derive(Debug, AsAny)]
 pub struct Synapse {
     id: String, // Pattern N000A00
     container: RefCell<Weak<RefCell<dyn Container>>>,
@@ -73,14 +77,6 @@ impl Component for Synapse {
 
     fn get_container(&self) -> Option<Rc<RefCell<dyn Container>>> {
         self.container.borrow().upgrade()
-    }
-
-    fn as_any(&self) -> &dyn std::any::Any {
-        self
-    }
-
-    fn as_mut_any(&mut self) -> &mut dyn std::any::Any {
-        self
     }
 }
 
