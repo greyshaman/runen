@@ -1,10 +1,10 @@
+use std::any::Any;
 use std::cell::RefCell;
 use std::cmp::max;
 use std::collections::HashMap;
 use std::error::Error;
 use std::rc::Rc;
 use std::rc::Weak;
-use std::any::Any;
 
 use as_any::AsAny;
 use as_any_derive::AsAny;
@@ -115,29 +115,45 @@ impl Identity for Axon {
 
 impl Emitter for Axon {}
 
+macro_rules! axon {
+    ($id:expr, $container:expr) => {
+        Axon::new($id, $container)
+    };
+}
+
 #[cfg(test)]
 mod tests {
-    use crate::rnn::tests::mock::mocks::MockComponent;
-    use crate::rnn::{common::media::Media, layouts::network::Network};
+    use crate::rnn::common::media::Media;
+    use crate::rnn::tests::fixtures::{new_network_fixture, new_neuron_fixture};
+    use crate::rnn::tests::mocks::MockComponent;
 
     use super::*;
 
-    fn fixture_new_axon() -> (Box<Rc<RefCell<dyn Media>>>, Box<Rc<RefCell<dyn Component>>>) {
-        let net: Rc<RefCell<dyn Media>> = Rc::new(RefCell::new(Network::new()));
+    fn new_axon_fixture() -> (Box<Rc<RefCell<dyn Media>>>, Box<Rc<RefCell<dyn Component>>>) {
+        let boxed_net: Box<Rc<RefCell<dyn Media>>> = new_network_fixture();
 
-        let neuron = net
-            .borrow_mut()
-            .create_container(&SpecificationType::Neuron, &net)
-            .unwrap();
+        let boxed_neuron = new_neuron_fixture(&boxed_net);
 
-        let axon = neuron.borrow_mut().create_emitter().unwrap();
+        let axon = boxed_neuron.borrow_mut().create_emitter().unwrap();
 
-        (Box::new(net), Box::new(axon))
+        (boxed_net, Box::new(axon))
+    }
+
+    #[test]
+    fn axon_macro_should_create_new_instance_as_result() {
+        let boxed_net: Box<Rc<RefCell<dyn Media>>> = new_network_fixture();
+
+        let boxed_neuron = new_neuron_fixture(&boxed_net);
+
+        let neuron_id = boxed_neuron.borrow().get_id();
+        let axon_id = format!("{neuron_id}{}", "E0");
+
+        assert!(axon!(&axon_id, &(*boxed_neuron)).is_ok())
     }
 
     #[test]
     fn can_send_only_positive_signal_with_save_value_as_received_to_all_connected_synapses() {
-        let (_net, boxed_axon) = fixture_new_axon();
+        let (_net, boxed_axon) = new_axon_fixture();
         let synapse1: Rc<RefCell<dyn Component>> = Rc::new(RefCell::new(MockComponent::default()));
         let synapse2: Rc<RefCell<dyn Component>> = Rc::new(RefCell::new(MockComponent::default()));
 

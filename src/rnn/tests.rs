@@ -1,1 +1,2 @@
-pub mod mock;
+pub mod fixtures;
+pub mod mocks;

@@ -1,12 +1,12 @@
 //! The Neuron is model of biological neuron cell within organelles
 
+use std::any::Any;
 use std::cell::RefCell;
 use std::collections::btree_map::Entry;
 use std::collections::BTreeMap;
 use std::error::Error;
 use std::rc::Rc;
 use std::rc::Weak;
-use std::any::Any;
 
 use as_any::AsAny;
 use as_any_derive::AsAny;

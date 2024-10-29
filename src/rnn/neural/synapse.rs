@@ -1,7 +1,7 @@
+use std::any::Any;
 use std::cell::RefCell;
 use std::cmp::{max, min};
 use std::rc::{Rc, Weak};
-use std::any::Any;
 
 use as_any::AsAny;
 use as_any_derive::AsAny;
@@ -117,7 +117,7 @@ impl Acceptor for Synapse {}
 mod tests {
     use crate::rnn::common::media::Media;
     use crate::rnn::layouts::network::Network;
-    use crate::rnn::tests::mock::mocks::MockComponent;
+    use crate::rnn::tests::mocks::MockComponent;
 
     use super::*;
 
