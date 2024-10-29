@@ -116,7 +116,7 @@ impl Acceptor for Synapse {}
 #[cfg(test)]
 mod tests {
     use crate::rnn::common::media::Media;
-    use crate::rnn::layouts::network::Network;
+    use crate::rnn::tests::fixtures::{new_network_fixture, new_neuron_fixture};
     use crate::rnn::tests::mocks::MockComponent;
 
     use super::*;
@@ -125,19 +125,16 @@ mod tests {
         max_capacity: Option<i16>,
         regeneration_amount: Option<i16>,
     ) -> (Box<Rc<RefCell<dyn Media>>>, Box<Rc<RefCell<dyn Component>>>) {
-        let net: Rc<RefCell<dyn Media>> = Rc::new(RefCell::new(Network::new()));
+        let boxed_net: Box<Rc<RefCell<dyn Media>>> = new_network_fixture();
 
-        let neuron = net
-            .borrow_mut()
-            .create_container(&SpecificationType::Neuron, &net)
-            .unwrap();
+        let boxed_neuron = new_neuron_fixture(&boxed_net);
 
-        let synapse = neuron
+        let synapse = boxed_neuron
             .borrow_mut()
             .create_acceptor(max_capacity, regeneration_amount)
             .unwrap();
 
-        (Box::new(net), Box::new(synapse))
+        (boxed_net, Box::new(synapse))
     }
 
     #[test]
