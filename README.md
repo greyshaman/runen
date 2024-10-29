@@ -6,7 +6,7 @@ We also aim to explore the differences between artificial neural networks and na
 
 
 We chose Rust to implement this model, as it has a rich ecosystem and many advantages. These include high performance, 
-robust security features, and compatibility with various platforms. I am very interested in how Rust will cope with this task, 
+robust security features, and compatibility with various platforms. Its very interested in how Rust will cope with this task, 
 but success will also depend on the programmer's ability to build the model correctly.
 
 
@@ -19,4 +19,4 @@ but success will also depend on the programmer's ability to build the model corr
 
 Для реализации этой модели мы выбрали Rust, так как он обладает богатой экосистемой и множеством преимуществ. 
 К ним относятся высокая производительность, надежные функции безопасности и совместимость с различными платформами. 
-Мне очень интересно, как Rust справится с этой задачей, но успех также будет зависеть от способности программиста правильно построить модель.
+Очень интересно, как Rust справится с этой задачей, но успех также будет зависеть от способности программиста правильно построить модель.
