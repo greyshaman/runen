@@ -1,12 +1,13 @@
 [package]
 name = "runen"
-version = "0.0.6"
+version = "0.0.7"
 edition = "2021"
 authors = ["Sergey Reshetnikov <shaman@simmirra.com>"]
 
 [dependencies]
 as_any = { path = "./macros/as_any" }
 as_any_derive = { path = "./macros/as_any/as_any_derive" }
+cargo-xtask = "0.1.0"
 regex = "1.11.1"
 
 [lib]

@@ -1,6 +1,7 @@
 pub mod spec_type;
 
 pub mod component;
+pub mod component_config;
 pub mod connectable;
 pub mod container;
 pub mod identity;
