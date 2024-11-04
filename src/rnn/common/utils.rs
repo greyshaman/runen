@@ -22,7 +22,6 @@ pub fn gen_id_by_spec_type(
         SpecificationType::InputTerminator => ('I', r"^M\d+Y\d+$"),
         SpecificationType::OutputTerminator => ('O', r"^M\d+X\d+$"),
         SpecificationType::Neuron => ('Z', r"^M\d+$"),
-        SpecificationType::Neuron => ('Z', r"^M\d+$"),
         SpecificationType::Receptor => ('Y', r"^M\d+$"),
         SpecificationType::Activator => ('X', r"^M\d+$"),
         SpecificationType::Network => ('M', r"^$"),
