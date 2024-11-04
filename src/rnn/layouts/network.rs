@@ -1,10 +1,10 @@
 use core::fmt;
+use std::any::Any;
 use std::cell::RefCell;
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::any::Any;
 
 use as_any::AsAny;
 use as_any_derive::AsAny;
