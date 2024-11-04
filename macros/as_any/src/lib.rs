@@ -6,5 +6,5 @@ pub trait AsAny: Any {
     fn as_any(&self) -> &dyn Any;
 
     /// The same as "as_any", but for mutable entities.
-    fn as_mut_any(&mut self) -> &mut dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }

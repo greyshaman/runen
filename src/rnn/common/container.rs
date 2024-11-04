@@ -1,4 +1,3 @@
-use std::any::Any;
 use std::cell::RefCell;
 use std::error::Error;
 use std::fmt::Debug;
@@ -34,6 +33,9 @@ pub trait Container: Identity + Specialized + AsAny + Debug {
 
     /// Returns the component based on its ID.
     fn get_component(&self, id: &str) -> Option<&Rc<RefCell<dyn Component>>>;
+
+    /// Returns the component based on its ID.
+    fn get_component_mut(&mut self, id: &str) -> Option<&mut Rc<RefCell<dyn Component>>>;
 
     /// Deleting a component by its ID
     fn remove_component(&mut self, id: &str) -> Result<(), Box<dyn Error>>;
