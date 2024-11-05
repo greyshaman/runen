@@ -30,7 +30,7 @@ use super::synapse::Synapse;
 #[derive(Debug, AsAny)]
 pub struct Neuron {
     id: String,
-    network: RefCell<Weak<RefCell<dyn Media>>>,
+    network: Weak<RefCell<dyn Media>>,
     components: BTreeMap<String, Rc<RefCell<dyn Component>>>,
 }
 
@@ -38,7 +38,7 @@ impl Neuron {
     pub fn new(id: &str, media: &Rc<RefCell<dyn Media>>) -> Neuron {
         Neuron {
             id: String::from(id),
-            network: RefCell::new(Rc::downgrade(&media)),
+            network: Rc::downgrade(&media),
             components: BTreeMap::new(),
         }
     }
@@ -90,14 +90,13 @@ impl Container for Neuron {
         let synapse = Synapse::new(
             &acceptor_id,
             self.network
-                .borrow()
                 .upgrade()
                 .unwrap()
                 .borrow()
                 .get_container(self.get_id().as_str())
                 .unwrap(),
-            max_capacity,
-            regeneration_amount,
+            max_capacity.unwrap_or(1),
+            regeneration_amount.unwrap_or(1),
         );
 
         Ok(Rc::clone(
@@ -120,13 +119,12 @@ impl Container for Neuron {
         let collector = Dendrite::new(
             &collector_id,
             self.network
-                .borrow()
                 .upgrade()
                 .unwrap()
                 .borrow()
                 .get_container(self.get_id().as_str())
                 .unwrap(),
-            weight,
+            weight.unwrap_or(1),
         );
 
         Ok(Rc::clone(
@@ -146,7 +144,6 @@ impl Container for Neuron {
         let aggregator = Neurosoma::new(
             &aggregator_id,
             self.network
-                .borrow()
                 .upgrade()
                 .unwrap()
                 .borrow()
@@ -170,15 +167,14 @@ impl Container for Neuron {
             return Err(Box::new(RnnError::OnlySingleAllowed));
         }
 
-        let emitter = Axon::new(
+        let emitter = create_axon!(
             &emitter_id,
             self.network
-                .borrow()
                 .upgrade()
                 .unwrap()
                 .borrow()
                 .get_container(self.get_id().as_str())
-                .unwrap(),
+                .unwrap()
         )?;
 
         match self.components.entry(emitter_id) {
@@ -192,6 +188,10 @@ impl Container for Neuron {
 
     fn get_component(&self, id: &str) -> Option<&Rc<RefCell<dyn Component>>> {
         self.components.get(id)
+    }
+
+    fn get_component_mut(&mut self, id: &str) -> Option<&mut Rc<RefCell<dyn Component>>> {
+        self.components.get_mut(id)
     }
 
     fn remove_component(&mut self, id: &str) -> Result<(), Box<dyn std::error::Error>> {

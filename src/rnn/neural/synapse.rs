@@ -15,16 +15,13 @@ use crate::rnn::common::signal_msg::SignalMessage;
 use crate::rnn::common::spec_type::SpecificationType;
 use crate::rnn::common::specialized::Specialized;
 
-/// The capacity of the synaptic mediator resource
-const DEFAULT_CAPACITY: i16 = 1;
-
 /// The Synapse is model of connection between Axon and Dendrite
 /// It is accept incoming stimulation and produce signal for dendrite
 /// Th Value of produced signal depended from stimulation value, capacity and weight
 #[derive(Debug, AsAny)]
 pub struct Synapse {
     id: String, // Pattern N000A00
-    container: RefCell<Weak<RefCell<dyn Container>>>,
+    container: Weak<RefCell<dyn Container>>,
     max_capacity: i16,
     current_capacity: i16,
     regeneration_amount: i16,
@@ -35,19 +32,16 @@ impl Synapse {
     pub fn new(
         id: &str,
         container: &Rc<RefCell<dyn Container>>,
-        capacity_opt: Option<i16>,
-        regeneration: Option<i16>,
+        capacity: i16,
+        regeneration: i16,
     ) -> Synapse {
-        let max_capacity = capacity_opt.unwrap_or(DEFAULT_CAPACITY);
-        let regeneration_amount = regeneration.unwrap_or(DEFAULT_CAPACITY);
-
         Synapse {
             id: String::from(id),
-            container: RefCell::new(Rc::downgrade(container)),
-            max_capacity,
-            current_capacity: max_capacity,
+            container: Rc::downgrade(container),
+            max_capacity: capacity,
+            current_capacity: capacity,
             collector: None,
-            regeneration_amount,
+            regeneration_amount: regeneration,
         }
     }
 }
@@ -76,7 +70,7 @@ impl Component for Synapse {
     }
 
     fn get_container(&self) -> Option<Rc<RefCell<dyn Container>>> {
-        self.container.borrow().upgrade()
+        self.container.upgrade()
     }
 }
 
@@ -85,7 +79,6 @@ impl Connectable for Synapse {
     fn connect(&mut self, party_id: &str) {
         self.collector = self
             .container
-            .borrow()
             .upgrade()
             .unwrap()
             .borrow()
@@ -112,6 +105,15 @@ impl Identity for Synapse {
 }
 
 impl Acceptor for Synapse {}
+
+macro_rules! create_synapse {
+    ($id:expr, $container:expr) => {
+        Synapse::new($id, $container, 1, 1)
+    };
+    ($id:expr, $container:expr, $capacity:expr, $regeneration:expr) => {
+        Synapse::new($id, $container, $capacity, $regeneration)
+    };
+}
 
 #[cfg(test)]
 mod tests {
@@ -143,7 +145,7 @@ mod tests {
         let collector: Rc<RefCell<dyn Component>> = Rc::new(RefCell::new(MockComponent::default()));
 
         let mut component = boxed_synapse.borrow_mut();
-        let synapse = component.as_mut_any().downcast_mut::<Synapse>().unwrap();
+        let synapse = component.as_any_mut().downcast_mut::<Synapse>().unwrap();
 
         synapse.collector = Some(Rc::clone(&collector));
 
@@ -174,7 +176,7 @@ mod tests {
         let collector: Rc<RefCell<dyn Component>> = Rc::new(RefCell::new(MockComponent::default()));
 
         let mut component = boxed_synapse.borrow_mut();
-        let synapse = component.as_mut_any().downcast_mut::<Synapse>().unwrap();
+        let synapse = component.as_any_mut().downcast_mut::<Synapse>().unwrap();
 
         synapse.collector = Some(Rc::clone(&collector));
 

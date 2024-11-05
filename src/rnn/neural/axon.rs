@@ -24,7 +24,7 @@ use crate::rnn::common::specialized::Specialized;
 #[derive(Debug, AsAny)]
 pub struct Axon {
     id: String,
-    container: RefCell<Weak<RefCell<dyn Container>>>,
+    container: Weak<RefCell<dyn Container>>,
     acceptors: RefCell<HashMap<String, Weak<RefCell<dyn Component>>>>,
 }
 
@@ -41,7 +41,7 @@ impl Axon {
 
         Ok(Axon {
             id: String::from(id),
-            container: RefCell::new(Rc::downgrade(&container_ref)),
+            container: Rc::downgrade(&container_ref),
             acceptors: RefCell::new(HashMap::new()),
         })
     }
@@ -71,14 +71,13 @@ impl Component for Axon {
     }
 
     fn get_container(&self) -> Option<Rc<RefCell<dyn Container>>> {
-        self.container.borrow().upgrade()
+        self.container.upgrade()
     }
 }
 
 impl Connectable for Axon {
     fn connect(&mut self, party_id: &str) {
         self.container
-            .borrow()
             .upgrade()
             .unwrap()
             .borrow()
@@ -115,7 +114,7 @@ impl Identity for Axon {
 
 impl Emitter for Axon {}
 
-macro_rules! axon {
+macro_rules! create_axon {
     ($id:expr, $container:expr) => {
         Axon::new($id, $container)
     };
@@ -148,7 +147,7 @@ mod tests {
         let neuron_id = boxed_neuron.borrow().get_id();
         let axon_id = format!("{neuron_id}{}", "E0");
 
-        assert!(axon!(&axon_id, &(*boxed_neuron)).is_ok())
+        assert!(create_axon!(&axon_id, &(*boxed_neuron)).is_ok())
     }
 
     #[test]
@@ -170,7 +169,7 @@ mod tests {
         }
 
         let mut binding = boxed_axon.borrow_mut();
-        let axon_mut = binding.as_mut_any().downcast_mut::<Axon>().unwrap();
+        let axon_mut = binding.as_any_mut().downcast_mut::<Axon>().unwrap();
         axon_mut.receive(Box::new(SignalMessage(5, Box::new(axon_mut.get_id()))));
 
         assert_eq!(

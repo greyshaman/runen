@@ -15,7 +15,7 @@ use crate::rnn::common::signal_msg::SignalMessage;
 use crate::rnn::common::spec_type::SpecificationType;
 use crate::rnn::common::specialized::Specialized;
 
-const DEFAULT_WEIGHT: i16 = 1;
+use super::neurosoma::Neurosoma;
 
 /// The Dendrite is model of neuron's part
 /// It is receive signal from synapse, weighting it and
@@ -23,18 +23,16 @@ const DEFAULT_WEIGHT: i16 = 1;
 #[derive(Debug, AsAny)]
 pub struct Dendrite {
     id: String,
-    container: RefCell<Weak<RefCell<dyn Container>>>,
+    container: Weak<RefCell<dyn Container>>,
     weight: i16,
     aggregator: Option<Rc<RefCell<dyn Component>>>,
 }
 
 impl Dendrite {
-    pub fn new(id: &str, container: &Rc<RefCell<dyn Container>>, weight: Option<i16>) -> Dendrite {
-        let weight = weight.unwrap_or(DEFAULT_WEIGHT);
-
+    pub fn new(id: &str, container: &Rc<RefCell<dyn Container>>, weight: i16) -> Dendrite {
         Dendrite {
             id: String::from(id),
-            container: RefCell::new(Rc::downgrade(&container)),
+            container: Rc::downgrade(&container),
             weight,
             aggregator: None,
         }
@@ -59,23 +57,33 @@ impl Component for Dendrite {
     }
 
     fn get_container(&self) -> Option<Rc<RefCell<dyn Container>>> {
-        self.container.borrow().upgrade()
+        self.container.upgrade()
     }
 }
 
 impl Connectable for Dendrite {
     fn connect(&mut self, party_id: &str) {
-        self.aggregator = self
-            .container
-            .borrow()
-            .upgrade()
-            .unwrap() // Neuron should anyway
-            .borrow()
-            .get_component(party_id)
-            .map(|aggregator_rc| Rc::clone(&aggregator_rc));
+        let container = self.container.upgrade().unwrap();
+        let container = container.borrow();
+        if let Some(component) = container.get_component(party_id) {
+            self.aggregator = Some(Rc::clone(component));
+
+            let neurosoma = component.borrow();
+            let neurosoma = neurosoma.as_any().downcast_ref::<Neurosoma>().unwrap();
+
+            neurosoma.add_signal_source(self.get_id().as_str());
+        }
     }
 
     fn disconnect(&mut self, _party_id: &str) {
+        self.aggregator.as_ref().map(|aggregator_rc| {
+            aggregator_rc
+                .borrow()
+                .as_any()
+                .downcast_ref::<Neurosoma>()
+                .unwrap()
+                .remove_signal_source(self.get_id().as_str());
+        });
         self.aggregator = None;
     }
 }
@@ -94,10 +102,19 @@ impl Identity for Dendrite {
 
 impl Collector for Dendrite {}
 
+macro_rules! create_dendrite {
+    ($id:expr, $container:expr) => {
+        Dendrite::new($id, $container, 1)
+    };
+    ($id:expr, $container:expr, $weight:expr) => {
+        Dendrite::new($id, $container, $weight)
+    };
+}
+
 #[cfg(test)]
 mod tests {
     use crate::rnn::common::media::Media;
-    use crate::rnn::layouts::network::Network;
+    use crate::rnn::tests::fixtures::{new_network_fixture, new_neuron_fixture};
     use crate::rnn::tests::mocks::MockComponent;
 
     use super::*;
@@ -105,16 +122,13 @@ mod tests {
     fn fixture_new_dendrite(
         weight: Option<i16>,
     ) -> (Box<Rc<RefCell<dyn Media>>>, Box<Rc<RefCell<dyn Component>>>) {
-        let net: Rc<RefCell<dyn Media>> = Rc::new(RefCell::new(Network::new()));
+        let boxed_net = new_network_fixture();
 
-        let neuron = net
-            .borrow_mut()
-            .create_container(&SpecificationType::Neuron, &net)
-            .unwrap();
+        let boxed_neuron = new_neuron_fixture(&boxed_net);
 
-        let dendrite = neuron.borrow_mut().create_collector(weight).unwrap();
+        let dendrite = boxed_neuron.borrow_mut().create_collector(weight).unwrap();
 
-        (Box::new(net), Box::new(dendrite))
+        (boxed_net, Box::new(dendrite))
     }
 
     #[test]
@@ -124,7 +138,7 @@ mod tests {
             Rc::new(RefCell::new(MockComponent::default()));
 
         let mut component = boxed_dendrite.borrow_mut();
-        let dendrite = component.as_mut_any().downcast_mut::<Dendrite>().unwrap();
+        let dendrite = component.as_any_mut().downcast_mut::<Dendrite>().unwrap();
 
         dendrite.aggregator = Some(Rc::clone(&neurosoma_rc));
 
@@ -156,7 +170,7 @@ mod tests {
             Rc::new(RefCell::new(MockComponent::default()));
 
         let mut component = boxed_dendrite.borrow_mut();
-        let dendrite = component.as_mut_any().downcast_mut::<Dendrite>().unwrap();
+        let dendrite = component.as_any_mut().downcast_mut::<Dendrite>().unwrap();
 
         dendrite.aggregator = Some(Rc::clone(&neurosoma_rc));
 
@@ -188,7 +202,7 @@ mod tests {
             Rc::new(RefCell::new(MockComponent::default()));
 
         let mut component = boxed_dendrite.borrow_mut();
-        let dendrite = component.as_mut_any().downcast_mut::<Dendrite>().unwrap();
+        let dendrite = component.as_any_mut().downcast_mut::<Dendrite>().unwrap();
 
         dendrite.aggregator = Some(Rc::clone(&neurosoma_rc));
 
