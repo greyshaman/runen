@@ -1,6 +1,7 @@
 use proc_macro::TokenStream;
 use quote::quote;
 
+/// Macro to implement reflection methods for AsAny trait
 #[proc_macro_derive(AsAny)]
 pub fn as_any_derive(input: TokenStream) -> TokenStream {
     let ast = syn::parse(input).unwrap();
