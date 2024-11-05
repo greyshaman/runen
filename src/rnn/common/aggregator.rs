@@ -1,7 +1,4 @@
-use super::{spec_type::SpecificationType, specialized::Specialized};
-
-pub trait Aggregator: Specialized {
-    fn get_spec_type(&self) -> SpecificationType {
-        SpecificationType::Neurosoma
-    }
-}
+/// An entity that is able to establish a connection with
+/// an emitter and convert multiple received signals into
+/// a single output signal, which it then sends to the emitter.
+pub trait Aggregator {}
