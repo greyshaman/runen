@@ -17,6 +17,7 @@ pub enum SpecificationType {
 }
 
 impl SpecificationType {
+    /// Check if component allowed to have sibling at the same container
     pub fn is_siblings_allowed(&self) -> bool {
         match *self {
             SpecificationType::Neurosoma | SpecificationType::Axon => false,
@@ -24,6 +25,7 @@ impl SpecificationType {
         }
     }
 
+    /// Check if id is valid for component with specified spec type
     pub fn is_id_valid(&self, id: &str) -> bool {
         let rex_pattern = match *self {
             Self::Synapse => r"^M\d+Z\d+A\d+$",
