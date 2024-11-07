@@ -10,6 +10,7 @@ use std::rc::Weak;
 
 use as_any::AsAny;
 use as_any_derive::AsAny;
+use regex::Regex;
 
 use crate::rnn::common::component::Component;
 use crate::rnn::common::container::Container;
@@ -21,6 +22,7 @@ use crate::rnn::common::specialized::Specialized;
 use crate::rnn::common::utils::check_id_on_siblings;
 use crate::rnn::common::utils::gen_id_by_spec_type;
 use crate::rnn::common::utils::get_component_id_fraction;
+use crate::rnn::cyber::indicator::Indicator;
 
 use super::axon::Axon;
 use super::dendrite::Dendrite;
@@ -72,6 +74,19 @@ impl Neuron {
             self.get_available_id_fraction_for(spec_type),
             spec_type,
         )
+    }
+
+    fn extract_container_id_from(&self, id: &str) -> Option<String> {
+        const R_PATTERN: &str = r"^(M\d+Z\d+).*$";
+        let rex = Regex::new(R_PATTERN).unwrap();
+
+        rex.captures(id).and_then(|caps| {
+            if caps.len() > 1 {
+                Some(caps[1].to_string())
+            } else {
+                None
+            }
+        })
     }
 }
 
@@ -186,12 +201,51 @@ impl Container for Neuron {
         }
     }
 
-    fn get_component(&self, id: &str) -> Option<&Rc<RefCell<dyn Component>>> {
-        self.components.get(id)
+    fn create_indicator(&mut self) -> Result<Rc<RefCell<dyn Component>>, Box<dyn Error>> {
+        let indicator_id = self.prepare_new_component_id(&SpecificationType::Indicator)?;
+
+        if !check_id_on_siblings(&indicator_id, &SpecificationType::Indicator) {
+            return Err(Box::new(RnnError::OnlySingleAllowed));
+        }
+
+        let indicator = Indicator::new(
+            &indicator_id,
+            self.network
+                .upgrade()
+                .unwrap()
+                .borrow()
+                .get_container(self.get_id().as_str())
+                .unwrap(),
+        );
+
+        match self.components.entry(indicator_id) {
+            Entry::Vacant(entry) => {
+                let value = Rc::new(RefCell::new(indicator));
+                Ok(Rc::clone(entry.insert(value)))
+            }
+            Entry::Occupied(_) => Err(Box::new(RnnError::OnlySingleAllowed)),
+        }
     }
 
-    fn get_component_mut(&mut self, id: &str) -> Option<&mut Rc<RefCell<dyn Component>>> {
-        self.components.get_mut(id)
+    fn get_media(&self) -> Option<Rc<RefCell<dyn Media>>> {
+        self.network.upgrade()
+    }
+
+    fn get_component(&self, id: &str) -> Option<Rc<RefCell<dyn Component>>> {
+        if id.to_string().contains(&self.get_id()) {
+            self.components.get(id).map(|c| Rc::clone(c))
+        } else {
+            self.extract_container_id_from(id).and_then(|container_id| {
+                self.network
+                    .upgrade()
+                    .and_then(|net| {
+                        net.borrow()
+                            .get_container(&container_id)
+                            .map(|container_rc| Rc::clone(container_rc))
+                    })
+                    .and_then(|container| container.borrow().get_component(id))
+            })
+        }
     }
 
     fn remove_component(&mut self, id: &str) -> Result<(), Box<dyn std::error::Error>> {
@@ -226,28 +280,17 @@ impl Identity for Neuron {
 
 #[cfg(test)]
 mod tests {
-    use crate::rnn::layouts::network::Network;
-
     use super::*;
 
-    fn fixture_new_empty_neuron() -> (Box<Rc<RefCell<dyn Media>>>, Box<Rc<RefCell<dyn Container>>>)
-    {
-        let net: Rc<RefCell<dyn Media>> = Rc::new(RefCell::new(Network::new()));
-
-        let neuron = net
-            .borrow_mut()
-            .create_container(&SpecificationType::Neuron, &net)
-            .unwrap();
-
-        (Box::new(net), Box::new(neuron))
-    }
-
     mod for_empty_neuron {
+        use crate::rnn::tests::fixtures::{new_network_fixture, new_neuron_fixture};
+
         use super::*;
 
         #[test]
         fn get_ids_for_should_return_empty_list() {
-            let (_net, new_neuron) = fixture_new_empty_neuron();
+            let net = new_network_fixture();
+            let new_neuron = new_neuron_fixture(&net);
 
             assert!(new_neuron
                 .borrow()
@@ -260,7 +303,8 @@ mod tests {
 
         #[test]
         fn get_available_id_fraction_for_should_return_zero() {
-            let (_net, new_neuron) = fixture_new_empty_neuron();
+            let net = new_network_fixture();
+            let new_neuron = new_neuron_fixture(&net);
 
             assert_eq!(
                 new_neuron
@@ -275,7 +319,8 @@ mod tests {
 
         #[test]
         fn prepare_new_component_id_should_return_available_id() {
-            let (_net, new_neuron) = fixture_new_empty_neuron();
+            let net = new_network_fixture();
+            let new_neuron = new_neuron_fixture(&net);
 
             let neuron_id = new_neuron.borrow().get_id();
 
@@ -292,59 +337,56 @@ mod tests {
 
         #[test]
         fn can_add_one_neurosoma() {
-            let (_net, new_neuron) = fixture_new_empty_neuron();
+            let net = new_network_fixture();
+            let new_neuron = new_neuron_fixture(&net);
 
             assert!(new_neuron.borrow_mut().create_aggregator().is_ok());
         }
 
         #[test]
         fn can_add_one_axon() {
-            let (_net, new_neuron) = fixture_new_empty_neuron();
+            let net = new_network_fixture();
+            let new_neuron = new_neuron_fixture(&net);
 
             assert!(new_neuron.borrow_mut().create_emitter().is_ok());
         }
 
         #[test]
         fn can_add_one_synapse() {
-            let (_net, new_neuron) = fixture_new_empty_neuron();
+            let net = new_network_fixture();
+            let new_neuron = new_neuron_fixture(&net);
 
             assert!(new_neuron.borrow_mut().create_acceptor(None, None).is_ok());
         }
 
         #[test]
         fn get_container_should_return_none() {
-            let (_net, new_neuron) = fixture_new_empty_neuron();
+            let net = new_network_fixture();
+            let new_neuron = new_neuron_fixture(&net);
 
             assert!(new_neuron.borrow().get_component("M0Z0C0").is_none());
         }
 
         #[test]
         fn remove_component_should_returns_error() {
-            let (_net, new_neuron) = fixture_new_empty_neuron();
+            let net = new_network_fixture();
+            let new_neuron = new_neuron_fixture(&net);
 
             assert!(new_neuron.borrow_mut().remove_component("M0Z0A0").is_err());
         }
 
         #[test]
         fn len_should_return_zero() {
-            let net: Rc<RefCell<dyn Media>> = Rc::new(RefCell::new(Network::new()));
-
-            let new_neuron = net
-                .borrow_mut()
-                .create_container(&SpecificationType::Neuron, &net)
-                .unwrap();
+            let net = new_network_fixture();
+            let new_neuron = new_neuron_fixture(&net);
 
             assert_eq!(new_neuron.borrow().len(), 0);
         }
 
         #[test]
         fn len_by_spec_type_for_some_spec_type_should_return_zero() {
-            let net: Rc<RefCell<dyn Media>> = Rc::new(RefCell::new(Network::new()));
-
-            let new_neuron = net
-                .borrow_mut()
-                .create_container(&SpecificationType::Neuron, &net)
-                .unwrap();
+            let net = new_network_fixture();
+            let new_neuron = new_neuron_fixture(&net);
 
             assert_eq!(
                 new_neuron
@@ -357,11 +399,14 @@ mod tests {
 
     mod for_non_empty_neuron {
 
+        use crate::rnn::tests::fixtures::{new_network_fixture, new_neuron_fixture};
+
         use super::*;
 
         #[test]
         fn get_ids_for_should_returns_non_empty_list() {
-            let (_net, new_neuron) = fixture_new_empty_neuron();
+            let net = new_network_fixture();
+            let new_neuron = new_neuron_fixture(&net);
 
             let _ = new_neuron.borrow_mut().create_acceptor(None, None);
 
@@ -376,7 +421,8 @@ mod tests {
 
         #[test]
         fn cannot_add_new_one_neurosoma() {
-            let (_net, new_neuron) = fixture_new_empty_neuron();
+            let net = new_network_fixture();
+            let new_neuron = new_neuron_fixture(&net);
 
             assert!(new_neuron.borrow_mut().create_aggregator().is_ok());
             assert!(new_neuron.borrow_mut().create_aggregator().is_err());
@@ -384,7 +430,8 @@ mod tests {
 
         #[test]
         fn cannot_add_new_one_axon() {
-            let (_net, new_neuron) = fixture_new_empty_neuron();
+            let net = new_network_fixture();
+            let new_neuron = new_neuron_fixture(&net);
 
             assert!(new_neuron.borrow_mut().create_emitter().is_ok());
             assert!(new_neuron.borrow_mut().create_emitter().is_err());
@@ -392,7 +439,8 @@ mod tests {
 
         #[test]
         fn can_add_new_one_synapse() {
-            let (_net, new_neuron) = fixture_new_empty_neuron();
+            let net = new_network_fixture();
+            let new_neuron = new_neuron_fixture(&net);
 
             assert!(new_neuron.borrow_mut().create_acceptor(None, None).is_ok());
             assert!(new_neuron.borrow_mut().create_acceptor(None, None).is_ok());
@@ -400,7 +448,8 @@ mod tests {
 
         #[test]
         fn get_container_should_return_component() {
-            let (_net, new_neuron) = fixture_new_empty_neuron();
+            let net = new_network_fixture();
+            let new_neuron = new_neuron_fixture(&net);
 
             let component_id = new_neuron
                 .borrow_mut()
@@ -423,7 +472,8 @@ mod tests {
 
         #[test]
         fn neuron_has_no_one_component_after_remove_component_without_error() {
-            let (_net, new_neuron) = fixture_new_empty_neuron();
+            let net = new_network_fixture();
+            let new_neuron = new_neuron_fixture(&net);
 
             let component_id = new_neuron
                 .borrow_mut()
@@ -447,7 +497,8 @@ mod tests {
 
         #[test]
         fn len_should_return_positive_number() {
-            let (_net, new_neuron) = fixture_new_empty_neuron();
+            let net = new_network_fixture();
+            let new_neuron = new_neuron_fixture(&net);
 
             let _ = new_neuron.borrow_mut().create_acceptor(None, None);
 
@@ -456,7 +507,8 @@ mod tests {
 
         #[test]
         fn len_by_spec_type_should_return_positive_number() {
-            let (_net, new_neuron) = fixture_new_empty_neuron();
+            let net = new_network_fixture();
+            let new_neuron = new_neuron_fixture(&net);
 
             let _ = new_neuron.borrow_mut().create_acceptor(None, None);
 

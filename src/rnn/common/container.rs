@@ -7,6 +7,7 @@ use as_any::AsAny;
 
 use super::component::Component;
 use super::identity::Identity;
+use super::media::Media;
 use super::spec_type::SpecificationType;
 use super::specialized::Specialized;
 
@@ -31,14 +32,17 @@ pub trait Container: Identity + Specialized + AsAny + Debug {
     /// Create the emitter component and save it in internal memory.
     fn create_emitter(&mut self) -> Result<Rc<RefCell<dyn Component>>, Box<dyn Error>>;
 
-    /// Returns the component based on its ID.
-    fn get_component(&self, id: &str) -> Option<&Rc<RefCell<dyn Component>>>;
+    /// Create the indicator component and save it in internal memory.
+    fn create_indicator(&mut self) -> Result<Rc<RefCell<dyn Component>>, Box<dyn Error>>;
 
     /// Returns the component based on its ID.
-    fn get_component_mut(&mut self, id: &str) -> Option<&mut Rc<RefCell<dyn Component>>>;
+    fn get_component(&self, id: &str) -> Option<Rc<RefCell<dyn Component>>>;
 
     /// Deleting a component by its ID
     fn remove_component(&mut self, id: &str) -> Result<(), Box<dyn Error>>;
+
+    /// Return parent media
+    fn get_media(&self) -> Option<Rc<RefCell<dyn Media>>>;
 
     /// Returns how many container contains components
     fn len(&self) -> usize;
