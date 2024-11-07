@@ -1,11 +1,14 @@
 [package]
 name = "runen"
-version = "0.0.3"
+version = "0.0.8"
 edition = "2021"
 authors = ["Sergey Reshetnikov <shaman@simmirra.com>"]
 
 [dependencies]
-regex = "1.11.0"
+as_any = { path = "./macros/as_any" }
+as_any_derive = { path = "./macros/as_any/as_any_derive" }
+cargo-xtask = "0.1.0"
+regex = "1.11.1"
 
 [lib]
 name = "librunen"

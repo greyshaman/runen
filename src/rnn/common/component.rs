@@ -1,15 +1,25 @@
-use std::{any::Any, fmt::Debug};
+use std::cell::RefCell;
+use std::fmt::Debug;
+use std::rc::Rc;
 
-use super::{identity::Identity, specialized::Specialized};
+use as_any::AsAny;
+
+use super::connectable::Connectable;
+use super::container::Container;
+use super::identity::Identity;
+use super::signal_msg::SignalMessage;
+use super::specialized::Specialized;
 
 /// The fundamental aspect of a component.
 /// Any structural part of a neuron can be considered a component,
 /// including the neuron itself, which is a component of a neural network.
-pub trait Component: Identity + Specialized + Any + Debug {
-  /// A method for carrying out reflection from a characteristic
-  /// to the types that implement it
-  fn as_any(&self) -> &dyn Any;
+pub trait Component: Connectable + Identity + Specialized + AsAny + Debug {
+    /// Receives a signal
+    fn receive(&self, signal_msg: Box<SignalMessage>);
 
-  /// The same as "as_any", but for mutable entities.
-  fn as_mut_any(&mut self) -> &mut dyn Any;
+    /// Sends a signal.
+    fn send(&self, signal: i16);
+
+    /// Return parent container which owned this component.
+    fn get_container(&self) -> Option<Rc<RefCell<dyn Container>>>;
 }
