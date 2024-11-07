@@ -21,6 +21,7 @@ use crate::rnn::neural::neuron::Neuron;
 
 static mut ID_COUNTER: AtomicUsize = AtomicUsize::new(0_usize);
 
+/// Network is a high level container to other containers (neurons)
 #[derive(Debug, AsAny)]
 pub struct Network {
     id: String,
