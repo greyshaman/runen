@@ -21,6 +21,7 @@ pub fn gen_id_by_spec_type(
         SpecificationType::Axon => ('E', r"^M\d+Z\d+$"),
         SpecificationType::InputTerminator => ('I', r"^M\d+Y\d+$"),
         SpecificationType::OutputTerminator => ('O', r"^M\d+X\d+$"),
+        SpecificationType::Indicator => ('R', r"^M\d+[XYZ]\d+$"),
         SpecificationType::Neuron => ('Z', r"^M\d+$"),
         SpecificationType::Receptor => ('Y', r"^M\d+$"),
         SpecificationType::Activator => ('X', r"^M\d+$"),
@@ -53,6 +54,7 @@ pub fn get_component_id_fraction(
         SpecificationType::Neurosoma => r"^M\d+Z\d+G(\d+)$",
         SpecificationType::Axon => r"^M\d+Z\d+E(\d+)$",
         SpecificationType::Neuron => r"^M\d+Z(\d+)$",
+        SpecificationType::Indicator => r"^M\d+[XYZ]\d+R(\d+)$",
         _ => return Err(Box::new(RnnError::NotSupportedArgValue)),
     };
 

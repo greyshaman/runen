@@ -9,6 +9,7 @@ pub enum SpecificationType {
     Axon,
     InputTerminator,
     OutputTerminator,
+    Indicator,
     Neuron,
     Receptor,
     Activator,
@@ -31,6 +32,7 @@ impl SpecificationType {
             Self::Axon => r"^M\d+Z\d+E\d+$",
             Self::InputTerminator => r"^M\d+Y\d+I\d+$",
             Self::OutputTerminator => r"^M\d+X\d+O\d+$",
+            Self::Indicator => r"^M\d+[ZYX]\d+R\d+",
             Self::Neuron => r"^M\d+Z\d+$",
             Self::Receptor => r"^M\d+Y\d+$",
             Self::Activator => r"^M\d+X\d+$",
@@ -76,6 +78,11 @@ mod tests {
         #[test]
         fn allowed_for_output_terminator() {
             assert!(SpecificationType::OutputTerminator.is_siblings_allowed())
+        }
+
+        #[test]
+        fn allowed_for_indicator() {
+            assert!(SpecificationType::Indicator.is_siblings_allowed())
         }
 
         #[test]
@@ -183,6 +190,23 @@ mod tests {
             #[test]
             fn negative_test_test() {
                 assert!(!SpecificationType::OutputTerminator.is_id_valid("M10J0A0"));
+            }
+        }
+
+        mod for_indicator {
+            use super::*;
+
+            #[test]
+            fn positive_test() {
+                assert!(SpecificationType::Indicator.is_id_valid("M10X0R0"));
+                assert!(SpecificationType::Indicator.is_id_valid("M10Y0R0"));
+                assert!(SpecificationType::Indicator.is_id_valid("M10Z0R0"));
+            }
+
+            #[test]
+            fn negative_test_test() {
+                assert!(!SpecificationType::Indicator.is_id_valid("M10W0R0"));
+                assert!(!SpecificationType::Indicator.is_id_valid("M10Z0P0"));
             }
         }
 

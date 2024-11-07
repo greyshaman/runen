@@ -15,10 +15,11 @@ use super::specialized::Specialized;
 /// including the neuron itself, which is a component of a neural network.
 pub trait Component: Connectable + Identity + Specialized + AsAny + Debug {
     /// Receives a signal
-    fn receive(&mut self, signal_msg: Box<SignalMessage>);
+    fn receive(&self, signal_msg: Box<SignalMessage>);
 
     /// Sends a signal.
     fn send(&self, signal: i16);
 
+    /// Return parent container which owned this component.
     fn get_container(&self) -> Option<Rc<RefCell<dyn Container>>>;
 }

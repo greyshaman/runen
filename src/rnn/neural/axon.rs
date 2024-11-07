@@ -48,7 +48,7 @@ impl Axon {
 }
 
 impl Component for Axon {
-    fn receive(&mut self, signal_msg: Box<SignalMessage>) {
+    fn receive(&self, signal_msg: Box<SignalMessage>) {
         let SignalMessage(signal, _) = *signal_msg;
         self.send(max(signal, 0));
     }
@@ -60,7 +60,7 @@ impl Component for Axon {
                 .upgrade()
                 .map(|acceptor_rc| {
                     acceptor_rc
-                        .borrow_mut()
+                        .borrow()
                         .receive(Box::new(SignalMessage(signal, Box::new(self.get_id()))));
                 })
                 .or_else(|| {
@@ -76,7 +76,11 @@ impl Component for Axon {
 }
 
 impl Connectable for Axon {
-    fn connect(&mut self, party_id: &str) {
+    fn connect(&self, party_id: &str) -> Result<(), Box<(dyn std::error::Error + 'static)>> {
+        if party_id == &self.get_id() {
+            return Err(Box::new(RnnError::ClosedLoop));
+        }
+
         self.container
             .upgrade()
             .unwrap()
@@ -86,16 +90,18 @@ impl Connectable for Axon {
                 self.acceptors
                     .borrow_mut()
                     .entry(party_id.to_string())
-                    .and_modify(|acceptor_weak| *acceptor_weak = Rc::downgrade(acceptor_rc))
-                    .or_insert_with(|| Rc::downgrade(acceptor_rc));
+                    .and_modify(|acceptor_weak| *acceptor_weak = Rc::downgrade(&acceptor_rc))
+                    .or_insert_with(|| Rc::downgrade(&acceptor_rc));
             })
             .or_else(|| {
                 self.acceptors.borrow_mut().remove(party_id);
                 Some(()) // FIXME check this method twice!!! Or write tests
             });
+
+        Ok(())
     }
 
-    fn disconnect(&mut self, party_id: &str) {
+    fn disconnect(&self, party_id: &str) {
         self.acceptors.borrow_mut().remove(party_id);
     }
 }
@@ -122,93 +128,92 @@ macro_rules! create_axon {
 
 #[cfg(test)]
 mod tests {
-    use crate::rnn::common::media::Media;
-    use crate::rnn::tests::fixtures::{new_network_fixture, new_neuron_fixture};
-    use crate::rnn::tests::mocks::MockComponent;
+
+    use crate::rnn::cyber::indicator::Indicator;
+    use crate::rnn::tests::fixtures::new_axon_fixture;
+    use crate::rnn::tests::fixtures::new_indicator_fixture;
+    use crate::rnn::tests::fixtures::new_network_fixture;
+    use crate::rnn::tests::fixtures::new_neuron_fixture;
 
     use super::*;
 
-    fn new_axon_fixture() -> (Box<Rc<RefCell<dyn Media>>>, Box<Rc<RefCell<dyn Component>>>) {
-        let boxed_net: Box<Rc<RefCell<dyn Media>>> = new_network_fixture();
-
-        let boxed_neuron = new_neuron_fixture(&boxed_net);
-
-        let axon = boxed_neuron.borrow_mut().create_emitter().unwrap();
-
-        (boxed_net, Box::new(axon))
-    }
-
     #[test]
     fn axon_macro_should_create_new_instance_as_result() {
-        let boxed_net: Box<Rc<RefCell<dyn Media>>> = new_network_fixture();
+        let net = new_network_fixture();
+        let neuron = new_neuron_fixture(&net);
 
-        let boxed_neuron = new_neuron_fixture(&boxed_net);
-
-        let neuron_id = boxed_neuron.borrow().get_id();
+        let neuron_id = neuron.borrow().get_id();
         let axon_id = format!("{neuron_id}{}", "E0");
 
-        assert!(create_axon!(&axon_id, &(*boxed_neuron)).is_ok())
+        assert!(create_axon!(&axon_id, &(*neuron)).is_ok())
     }
 
     #[test]
     fn can_send_only_positive_signal_with_save_value_as_received_to_all_connected_synapses() {
-        let (_net, boxed_axon) = new_axon_fixture();
-        let synapse1: Rc<RefCell<dyn Component>> = Rc::new(RefCell::new(MockComponent::default()));
-        let synapse2: Rc<RefCell<dyn Component>> = Rc::new(RefCell::new(MockComponent::default()));
+        let net = new_network_fixture();
+        let neuron = new_neuron_fixture(&net);
+        let axon = new_axon_fixture(&neuron);
+        let indicator1 = new_indicator_fixture(&neuron);
+        let indicator2 = new_indicator_fixture(&neuron);
 
-        {
-            let binding = boxed_axon.borrow();
-            let axon = binding.as_any().downcast_ref::<Axon>().unwrap();
+        let axon = axon.borrow();
+        axon.connect(indicator1.borrow().get_id().as_str()).unwrap();
+        axon.connect(indicator2.borrow().get_id().as_str()).unwrap();
 
-            axon.acceptors
-                .borrow_mut()
-                .insert("1".to_string(), Rc::downgrade(&synapse1));
-            axon.acceptors
-                .borrow_mut()
-                .insert("2".to_string(), Rc::downgrade(&synapse2));
-        }
+        let indicator1 = indicator1.borrow();
+        let indicator1 = indicator1.as_any().downcast_ref::<Indicator>().unwrap();
 
-        let mut binding = boxed_axon.borrow_mut();
-        let axon_mut = binding.as_any_mut().downcast_mut::<Axon>().unwrap();
-        axon_mut.receive(Box::new(SignalMessage(5, Box::new(axon_mut.get_id()))));
+        let indicator2 = indicator2.borrow();
+        let indicator2 = indicator2.as_any().downcast_ref::<Indicator>().unwrap();
 
-        assert_eq!(
-            synapse1
-                .borrow()
-                .as_any()
-                .downcast_ref::<MockComponent>()
-                .unwrap()
-                .signal,
-            5
-        );
-        assert_eq!(
-            synapse2
-                .borrow()
-                .as_any()
-                .downcast_ref::<MockComponent>()
-                .unwrap()
-                .signal,
-            5
-        );
+        axon.receive(Box::new(SignalMessage(5, Box::new(axon.get_id()))));
 
-        axon_mut.receive(Box::new(SignalMessage(-5, Box::new(axon_mut.get_id()))));
-        assert_eq!(
-            synapse1
-                .borrow()
-                .as_any()
-                .downcast_ref::<MockComponent>()
-                .unwrap()
-                .signal,
-            0
-        );
-        assert_eq!(
-            synapse2
-                .borrow()
-                .as_any()
-                .downcast_ref::<MockComponent>()
-                .unwrap()
-                .signal,
-            0
-        );
+        assert_eq!(indicator1.get_signal(), 5);
+        assert_eq!(indicator2.get_signal(), 5);
+
+        axon.receive(Box::new(SignalMessage(-5, Box::new(axon.get_id()))));
+        assert_eq!(indicator1.get_signal(), 0);
+        assert_eq!(indicator2.get_signal(), 0);
+    }
+
+    #[test]
+    fn should_send_signal_to_connected_synapse_from_same_neuron() {
+        let net = new_network_fixture();
+        let neuron = new_neuron_fixture(&net);
+        let axon = new_axon_fixture(&neuron);
+
+        let indicator = new_indicator_fixture(&neuron);
+
+        let axon = axon.borrow();
+        axon.connect(indicator.borrow().get_id().as_str()).unwrap();
+
+        axon.receive(Box::new(SignalMessage(2, Box::new(String::from("test")))));
+
+        let indicator = indicator.borrow();
+        let indicator = indicator.as_any().downcast_ref::<Indicator>().unwrap();
+        assert_eq!(indicator.get_signal(), 2);
+        assert_eq!(indicator.get_source_id(), axon.get_id().as_str())
+    }
+
+    #[test]
+    fn should_send_signal_to_connected_synapse_from_other_neuron() {
+        let net = new_network_fixture();
+        let neuron1 = new_neuron_fixture(&net);
+        let neuron2 = new_neuron_fixture(&net);
+        let axon = new_axon_fixture(&neuron1);
+
+        let indicator = new_indicator_fixture(&neuron2);
+
+        let axon = axon.borrow();
+        axon.connect(indicator.borrow().get_id().as_str()).unwrap();
+
+        assert_eq!(Rc::weak_count(&indicator), 1);
+
+        axon.receive(Box::new(SignalMessage(2, Box::new(String::from("test")))));
+
+        let indicator = indicator.borrow();
+        let indicator = indicator.as_any().downcast_ref::<Indicator>().unwrap();
+        assert_eq!(indicator.get_signal(), 2);
+        assert_eq!(indicator.get_source_id(), axon.get_id().as_str())
     }
 }

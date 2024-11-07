@@ -21,8 +21,11 @@ pub enum RnnError {
     /// Not supported argument value
     NotSupportedArgValue,
 
-    /// Wen create entity in container which should be single
+    /// When create entity in container which should be single
     OnlySingleAllowed,
+
+    /// When connect to self
+    ClosedLoop,
 }
 
 impl std::fmt::Display for RnnError {

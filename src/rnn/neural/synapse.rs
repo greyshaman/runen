@@ -11,6 +11,7 @@ use crate::rnn::common::component::Component;
 use crate::rnn::common::connectable::Connectable;
 use crate::rnn::common::container::Container;
 use crate::rnn::common::identity::Identity;
+use crate::rnn::common::rnn_error::RnnError;
 use crate::rnn::common::signal_msg::SignalMessage;
 use crate::rnn::common::spec_type::SpecificationType;
 use crate::rnn::common::specialized::Specialized;
@@ -23,9 +24,9 @@ pub struct Synapse {
     id: String, // Pattern N000A00
     container: Weak<RefCell<dyn Container>>,
     max_capacity: i16,
-    current_capacity: i16,
+    current_capacity: RefCell<i16>,
     regeneration_amount: i16,
-    collector: Option<Rc<RefCell<dyn Component>>>,
+    collector: RefCell<Option<Rc<RefCell<dyn Component>>>>,
 }
 
 impl Synapse {
@@ -39,23 +40,24 @@ impl Synapse {
             id: String::from(id),
             container: Rc::downgrade(container),
             max_capacity: capacity,
-            current_capacity: capacity,
-            collector: None,
+            current_capacity: RefCell::new(capacity),
+            collector: RefCell::new(None),
             regeneration_amount: regeneration,
         }
     }
 }
 
 impl Component for Synapse {
-    fn receive(&mut self, signal_msg: Box<SignalMessage>) {
+    fn receive(&self, signal_msg: Box<SignalMessage>) {
         let SignalMessage(signal, _) = *signal_msg;
         let signal = max(signal, 0);
-        let new_signal = min(signal, self.current_capacity);
+        let mut current_capacity_mut = self.current_capacity.borrow_mut();
+        let new_signal = min(signal, *current_capacity_mut);
 
-        self.current_capacity -= new_signal;
+        *current_capacity_mut -= new_signal;
         // regeneration mediator capacity
-        self.current_capacity += min(
-            self.current_capacity + self.regeneration_amount,
+        *current_capacity_mut += min(
+            *current_capacity_mut + self.regeneration_amount,
             self.max_capacity,
         );
 
@@ -63,8 +65,11 @@ impl Component for Synapse {
     }
 
     fn send(&self, signal: i16) {
-        self.collector.as_ref().map(|d| {
-            d.borrow_mut()
+        let collector = self.collector.borrow();
+        let collector = collector.as_ref();
+        collector.map(|collector| {
+            collector
+                .borrow()
                 .receive(Box::new(SignalMessage(signal, Box::new(self.get_id()))))
         });
     }
@@ -76,19 +81,25 @@ impl Component for Synapse {
 
 impl Connectable for Synapse {
     /// Connect to collector
-    fn connect(&mut self, party_id: &str) {
-        self.collector = self
+    fn connect(&self, party_id: &str) -> Result<(), Box<dyn std::error::Error>> {
+        if party_id == &self.get_id() {
+            return Err(Box::new(RnnError::ClosedLoop));
+        }
+
+        *self.collector.borrow_mut() = self
             .container
             .upgrade()
             .unwrap()
             .borrow()
             .get_component(party_id)
             .map(|collector_rc| Rc::clone(&collector_rc));
+
+        Ok(())
     }
 
     /// Disconnect from collector
-    fn disconnect(&mut self, _party_id: &str) {
-        self.collector = None;
+    fn disconnect(&self, _party_id: &str) {
+        *self.collector.borrow_mut() = None;
     }
 }
 
@@ -117,87 +128,54 @@ macro_rules! create_synapse {
 
 #[cfg(test)]
 mod tests {
-    use crate::rnn::common::media::Media;
-    use crate::rnn::tests::fixtures::{new_network_fixture, new_neuron_fixture};
-    use crate::rnn::tests::mocks::MockComponent;
+    use crate::rnn::cyber::indicator::Indicator;
+    use crate::rnn::tests::fixtures::new_indicator_fixture;
+    use crate::rnn::tests::fixtures::new_network_fixture;
+    use crate::rnn::tests::fixtures::new_neuron_fixture;
+    use crate::rnn::tests::fixtures::new_synapse_fixture;
 
     use super::*;
 
-    fn fixture_new_synapse(
-        max_capacity: Option<i16>,
-        regeneration_amount: Option<i16>,
-    ) -> (Box<Rc<RefCell<dyn Media>>>, Box<Rc<RefCell<dyn Component>>>) {
-        let boxed_net: Box<Rc<RefCell<dyn Media>>> = new_network_fixture();
-
-        let boxed_neuron = new_neuron_fixture(&boxed_net);
-
-        let synapse = boxed_neuron
-            .borrow_mut()
-            .create_acceptor(max_capacity, regeneration_amount)
-            .unwrap();
-
-        (boxed_net, Box::new(synapse))
-    }
-
     #[test]
     fn should_limit_input_signal_by_max_capacity() {
-        let (_net, boxed_synapse) = fixture_new_synapse(None, None);
-        let collector: Rc<RefCell<dyn Component>> = Rc::new(RefCell::new(MockComponent::default()));
+        let net = new_network_fixture();
+        let neuron = new_neuron_fixture(&net);
 
-        let mut component = boxed_synapse.borrow_mut();
-        let synapse = component.as_any_mut().downcast_mut::<Synapse>().unwrap();
+        let synapse = new_synapse_fixture(&neuron, None, None);
+        let synapse = synapse.borrow();
 
-        synapse.collector = Some(Rc::clone(&collector));
+        let indicator = new_indicator_fixture(&neuron);
+        let indicator = indicator.borrow();
 
-        {
-            synapse.receive(Box::new(SignalMessage(3, Box::new(synapse.get_id()))));
-            let mock_collector = collector.borrow();
-            let mock_collector = mock_collector
-                .as_any()
-                .downcast_ref::<MockComponent>()
-                .unwrap();
-            assert_eq!(mock_collector.signal, 1);
-        }
+        synapse.connect(indicator.get_id().as_str()).unwrap();
 
-        {
-            synapse.receive(Box::new(SignalMessage(-3, Box::new(synapse.get_id()))));
-            let mock_collector = collector.borrow();
-            let mock_collector = mock_collector
-                .as_any()
-                .downcast_ref::<MockComponent>()
-                .unwrap();
-            assert_eq!(mock_collector.signal, 0);
-        }
+        let raw_indicator = indicator.as_any().downcast_ref::<Indicator>().unwrap();
+
+        synapse.receive(Box::new(SignalMessage(3, Box::new(synapse.get_id()))));
+        assert_eq!(raw_indicator.get_signal(), 1);
+
+        synapse.receive(Box::new(SignalMessage(-3, Box::new(synapse.get_id()))));
+        assert_eq!(raw_indicator.get_signal(), 0);
     }
 
     #[test]
     fn capacity_relaxation() {
-        let (_net, boxed_synapse) = fixture_new_synapse(Some(10), Some(2));
-        let collector: Rc<RefCell<dyn Component>> = Rc::new(RefCell::new(MockComponent::default()));
+        let net = new_network_fixture();
+        let neuron = new_neuron_fixture(&net);
 
-        let mut component = boxed_synapse.borrow_mut();
-        let synapse = component.as_any_mut().downcast_mut::<Synapse>().unwrap();
+        let synapse = new_synapse_fixture(&neuron, Some(10), Some(2));
+        let synapse = synapse.borrow();
 
-        synapse.collector = Some(Rc::clone(&collector));
+        let indicator = new_indicator_fixture(&neuron);
+        let indicator = indicator.borrow();
 
-        {
-            synapse.receive(Box::new(SignalMessage(10, Box::new(synapse.get_id()))));
-            let mock_collector = collector.borrow();
-            let mock_collector = mock_collector
-                .as_any()
-                .downcast_ref::<MockComponent>()
-                .unwrap();
-            assert_eq!(mock_collector.signal, 10);
-        }
+        synapse.connect(indicator.get_id().as_str()).unwrap();
+        let raw_indicator = indicator.as_any().downcast_ref::<Indicator>().unwrap();
 
-        {
-            synapse.receive(Box::new(SignalMessage(10, Box::new(synapse.get_id()))));
-            let mock_collector = collector.borrow();
-            let mock_collector = mock_collector
-                .as_any()
-                .downcast_ref::<MockComponent>()
-                .unwrap();
-            assert_eq!(mock_collector.signal, 2);
-        }
+        synapse.receive(Box::new(SignalMessage(10, Box::new(synapse.get_id()))));
+        assert_eq!(raw_indicator.get_signal(), 10);
+
+        synapse.receive(Box::new(SignalMessage(10, Box::new(synapse.get_id()))));
+        assert_eq!(raw_indicator.get_signal(), 2);
     }
 }
