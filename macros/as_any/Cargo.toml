@@ -1,7 +1,0 @@
-[package]
-name = "as_any"
-version = "0.1.0"
-edition = "2021"
-authors = ["Sergey Reshetnikov <shaman@simmirra.com>"]
-
-[dependencies]

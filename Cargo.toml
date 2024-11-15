@@ -1,19 +1,16 @@
 [package]
 name = "runen"
-version = "0.0.8"
+version = "0.1.0"
 edition = "2021"
 authors = ["Sergey Reshetnikov <shaman@simmirra.com>"]
+license = "MIT"
 
 [dependencies]
-as_any = { path = "./macros/as_any" }
-as_any_derive = { path = "./macros/as_any/as_any_derive" }
 cargo-xtask = "0.1.0"
 regex = "1.11.1"
+tokio = { version = "1.41.1", features = ["full"] }
+tokio-stream = { version = "0.1.16", features = ["full"] }
 
 [lib]
 name = "librunen"
 path = "src/lib.rs"
-
-[[bin]]
-name = "num_converter"
-path = "src/num_converter.rs"
