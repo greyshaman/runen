@@ -10,7 +10,7 @@ pub enum RnnError {
     IdNotFound,
 
     /// Error on attempt to create unique entity with used Id
-    IdBusy,
+    IdBusy(String),
 
     /// Not found matched data by provided pattern
     PatternNotFound,
@@ -24,7 +24,7 @@ pub enum RnnError {
     /// When create entity in container which should be single
     OnlySingleAllowed,
 
-    /// When connect to self
+    /// When connection to self not allowed
     ClosedLoop,
 }
 
