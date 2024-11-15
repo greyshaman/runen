@@ -1,7 +1,7 @@
 # Overview
 
-The goal of this project is to create a model that will simulate the operation of the natural neural network of the human brain.
-We want to understand how logic functions in neural networks like those that exist in our brain.
+The goal of this project is to create a model that will simulate the operation of a natural neural network, similar to the one that works in the human brain.
+I would like to understand how logic functions in neural networks like those that exist in our brain.
 We also aim to explore the differences between artificial neural networks and natural ones, albeit within the framework of a model.
 
 We chose Rust to implement this model, as it has a rich ecosystem and many advantages. These include high performance,
@@ -11,8 +11,8 @@ but success will also depend on the programmer's ability to build the model corr
 
 # Описание
 
-Цель этого проекта — создать модель, которая будет имитировать работу естественной нейронной сети человеческого мозга.
-Мы хотим понять, как функционирует логика в нейронных сетях, подобных тем, что существуют в нашем мозге.
+Цель этого проекта — создать модель, которая будет имитировать работу естественной нейронной сети, подобной той, которая работает в человеческом мозгу.
+Хотелось бы понять, как функционирует логика в нейронных сетях, подобных тем, что существуют в нашем мозге.
 Также мы стремимся изучить различия между искусственными нейронными сетями и естественными, пусть и в рамках модели.
 
 Для реализации этой модели мы выбрали Rust, так как он обладает богатой экосистемой и множеством преимуществ.
