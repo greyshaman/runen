@@ -1,9 +1,9 @@
-# RuNeN
+# RuNeN - (Rust Neural Network)
 
 <img src="https://github.com/greyshaman/runen/raw/refs/heads/dev/images/neuro_mech_3d_l.webp" width="50%" alt="Runen Logo">
 
 
-Цель этого проекта — создать модель, которая будет имитировать работу естественной нейронной сети, подобной той, что функционирует в человеческом мозгу. Мы хотим понять, как работает логика в таких нейронных сетях, и изучить различия между искусственными и естественными нейронными сетями в рамках модели.
+Цель этого проекта — создать модель, которая моделирует работу естественной нейронной сети, подобной той, что функционирует в человеческом мозгу. Мы хотим понять, как работает логика в таких нейронных сетях, и изучить различия между искусственными и естественными нейронными сетями в рамках модели.
 
 Для реализации этой модели выбран Rust, так как он обладает богатой экосистемой и множеством преимуществ, таких как высокая производительность, надежные функции безопасности, совместимость с различными платформами и возможность создания хорошо управляемых многозадачных систем.
 
@@ -21,6 +21,9 @@
 
 - [Description](#description)
   - [The Neural Network Model](#the-neural-network-model)
+- [Dependencies](#dependencies)
+- [Howto use](#howto-use)
+- [Todo](#todo)
 
 ## Описание
 
@@ -56,20 +59,18 @@
 
 ## Список развития
 
-- Улучшить код: заменить Mutex на RwLock, там где это может улучшить функциональность
-- Добавить интеграционные тесты
-- Добавить бенчмарки и профилировать код
-- Добавить чтение/запись конфигурации: использовать serde
-- Реализовать обучение сети
-- Визуализировать процесс работы сети
+- Добавить интеграционные тесты.
+- Улучшить взаимодействие с сетевыми интерфейсами.
+- Добавить бенчмарки и профилировать код.
+- Добавить чтение/запись конфигурации: использовать serde.
+- Реализовать обучение сети.
+- Разработать управляющую систему, которая будет управлять сетями (Создание, обучение, взаимодействие сетей).
+- Визуализировать процесс работы сети.
+- Добавить реализацию нейронной сети, использующую тензорные представления данных.
 
 ---
 
-# RuNeN - (Rust Neural Network)
-
-The goal of this project is to create a model that will simulate the operation of a natural neural network, similar to the one that works in the human brain.
-I would like to understand how logic functions in neural networks like those that exist in our brain.
-We also aim to explore the differences between artificial neural networks and natural ones, albeit within the framework of a model.
+The goal of this project is to create a model that simulates the operation of a natural neural network similar to the one that functions in the human brain. We want to understand how logic works in such neural networks and explore the differences between artificial and natural neural networks within the framework of the model.
 
 Rust was chosen to implement this model, as it has a rich ecosystem and many advantages.
 These include high performance, robust security features, and compatibility with various platforms.
@@ -103,9 +104,11 @@ The axon transmits the positive signal received from the adder to all the synaps
 
 ## Todo
 
-- Improve the code by replacing Mutex with RwLock, which can improve functionality.
 - Add integration tests to ensure the code works as expected.
+- Improve interaction with network interfaces
 - Profile and benchmark the code to identify any performance issues.
 - Add read/write configuration using serge.
 - Implement network training.
+- To develop a management system that will manage networks (Creation, training, network interaction).
 - Visualize the network operation process.
+- Implement a neural network using tensor representations of data.
