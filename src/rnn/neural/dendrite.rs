@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use tokio::sync::{broadcast::Receiver, Mutex};
+use tokio::sync::{broadcast::Receiver, RwLock};
 
 /// Input configuration
 #[derive(Debug)]
@@ -28,7 +28,7 @@ pub struct Dendrite {
     pub connected: Option<String>,
 
     /// Receiver part of channel between axon and synapse
-    pub input: Option<Arc<Mutex<Receiver<u8>>>>,
+    pub input: Option<Arc<RwLock<Receiver<u8>>>>,
 }
 
 impl InputCfg {
