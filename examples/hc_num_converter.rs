@@ -57,9 +57,9 @@ async fn main() {
 
     let net_clone = net.clone();
 
-    let t1 = task::spawn(async move {
+    let _t1 = task::spawn(async move {
         let zero_signal = net_clone.get_output_receiver(0).await.unwrap();
-        let mut rx = zero_signal.lock().await;
+        let mut rx = zero_signal.write().await;
         while let Ok(signal) = rx.recv().await {
             println!("-+= 0 =+- ({})", signal);
         }
@@ -67,9 +67,9 @@ async fn main() {
 
     let net_clone = net.clone();
 
-    let t2 = task::spawn(async move {
+    let _t2 = task::spawn(async move {
         let one_signal = net_clone.get_output_receiver(1).await.unwrap();
-        let mut rx = one_signal.lock().await;
+        let mut rx = one_signal.write().await;
         while let Ok(signal) = rx.recv().await {
             println!("-+= 1 =+- ({})", signal);
         }

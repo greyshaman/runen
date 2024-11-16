@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use regex::Regex;
 use tokio::sync::broadcast::{self, Receiver, Sender};
-use tokio::sync::Mutex;
+use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 
 use crate::rnn::common::rnn_error::RnnError;
@@ -22,11 +22,11 @@ static CHANNEL_CAPACITY: usize = 5;
 #[derive(Debug)]
 pub struct Network {
     id: String,
-    neurons: Mutex<BTreeMap<String, Arc<Neuron>>>,
-    input_interface: Arc<Mutex<BTreeMap<usize, Arc<Mutex<Sender<u8>>>>>>,
-    output_interface: Arc<Mutex<BTreeMap<usize, Arc<Mutex<Receiver<u8>>>>>>,
-    processing_registers: Arc<Mutex<HashMap<usize, JoinHandle<()>>>>,
-    results: Arc<Mutex<Vec<Vec<u8>>>>,
+    neurons: RwLock<BTreeMap<String, Arc<Neuron>>>,
+    input_interface: Arc<RwLock<BTreeMap<usize, Arc<RwLock<Sender<u8>>>>>>,
+    output_interface: Arc<RwLock<BTreeMap<usize, Arc<RwLock<Receiver<u8>>>>>>,
+    processing_registers: Arc<RwLock<HashMap<usize, JoinHandle<()>>>>,
+    results: Arc<RwLock<Vec<Vec<u8>>>>,
 }
 
 impl Network {
@@ -38,17 +38,17 @@ impl Network {
         )
         .map(|id| Network {
             id,
-            neurons: Mutex::new(BTreeMap::new()),
-            input_interface: Arc::new(Mutex::new(BTreeMap::new())),
-            output_interface: Arc::new(Mutex::new(BTreeMap::new())),
-            processing_registers: Arc::new(Mutex::new(HashMap::new())),
-            results: Arc::new(Mutex::new(Vec::new())),
+            neurons: RwLock::new(BTreeMap::new()),
+            input_interface: Arc::new(RwLock::new(BTreeMap::new())),
+            output_interface: Arc::new(RwLock::new(BTreeMap::new())),
+            processing_registers: Arc::new(RwLock::new(HashMap::new())),
+            results: Arc::new(RwLock::new(Vec::new())),
         })
     }
 
     pub async fn get_neuron(&self, id: &str) -> Option<Arc<Neuron>> {
-        let g_neurons = self.neurons.lock().await;
-        g_neurons.get(id).map(|neuron| Arc::clone(neuron))
+        let r_neurons = self.neurons.read().await;
+        r_neurons.get(id).map(|neuron| Arc::clone(neuron))
     }
 
     pub async fn create_neuron(
@@ -78,8 +78,8 @@ impl Network {
             id: new_id.clone(),
             input_configs,
         };
-        let mut g_neurons = self.neurons.lock().await;
-        match g_neurons.entry(new_id.clone()) {
+        let mut w_neurons = self.neurons.write().await;
+        match w_neurons.entry(new_id.clone()) {
             Entry::Vacant(entry) => Ok(Arc::clone(
                 entry.insert(Neuron::build(neuron_config, Arc::clone(&network)).await),
             )),
@@ -91,8 +91,8 @@ impl Network {
     }
 
     pub async fn get_available_neuron_id(&self) -> usize {
-        let g_neurons = self.neurons.lock().await;
-        g_neurons.keys().last().map_or(0, |id| {
+        let r_neurons = self.neurons.read().await;
+        r_neurons.keys().last().map_or(0, |id| {
             if id.is_empty() {
                 return 0;
             }
@@ -110,15 +110,15 @@ impl Network {
     }
 
     pub async fn remove_neuron(&self, id: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let mut g_neurons = self.neurons.lock().await;
-        match g_neurons.remove(id) {
+        let mut w_neurons = self.neurons.write().await;
+        match w_neurons.remove(id) {
             Some(_) => Ok(()),
             None => Err(Box::new(RnnError::IdNotFound)),
         }
     }
 
     pub async fn has_neuron(&self, id: &str) -> bool {
-        self.neurons.lock().await.contains_key(id)
+        self.neurons.read().await.contains_key(id)
     }
 
     pub async fn connect_neurons(
@@ -139,14 +139,14 @@ impl Network {
     }
 
     pub async fn len(&self) -> usize {
-        self.neurons.lock().await.len()
+        self.neurons.read().await.len()
     }
 
     /// Send signal to port connected to synapse
     pub async fn input(&self, signal: u8, port: usize) -> Result<usize, Box<dyn Error>> {
-        if let Some(synapse) = self.input_interface.lock().await.get(&port) {
-            let g_synapse = synapse.lock().await;
-            g_synapse
+        if let Some(synapse) = self.input_interface.read().await.get(&port) {
+            let r_synapse = synapse.read().await;
+            r_synapse
                 .send(signal)
                 .map_err(|err| Box::new(err) as Box<dyn Error>)
         } else {
@@ -168,12 +168,12 @@ impl Network {
             let (tx, rx) = broadcast::channel(CHANNEL_CAPACITY);
             let src_id = format!("{}I{}", self.get_id(), network_port);
             neuron
-                .connect(&src_id, neuron_port, Arc::new(Mutex::new(rx)))
+                .connect(&src_id, neuron_port, Arc::new(RwLock::new(rx)))
                 .await?;
-            let mut g_input_interface = self.input_interface.lock().await;
-            match g_input_interface.entry(network_port) {
+            let mut w_input_interface = self.input_interface.write().await;
+            match w_input_interface.entry(network_port) {
                 Entry::Vacant(entry) => {
-                    entry.insert(Arc::new(Mutex::new(tx)));
+                    entry.insert(Arc::new(RwLock::new(tx)));
                     Ok(())
                 }
                 Entry::Occupied(_) => Err(Box::new(RnnError::IdBusy(format!(
@@ -187,9 +187,9 @@ impl Network {
     }
 
     pub async fn pop_results(&self) -> Vec<Vec<u8>> {
-        let mut g_results = self.results.lock().await;
-        let snapshot = g_results.clone();
-        g_results.clear();
+        let mut w_results = self.results.write().await;
+        let snapshot = w_results.clone();
+        w_results.clear();
         snapshot
     }
 
@@ -198,7 +198,7 @@ impl Network {
         network_port: usize,
         neuron_id: &str,
     ) -> Result<(), Box<dyn Error>> {
-        let mut g_output_interface = self.output_interface.lock().await;
+        let mut w_output_interface = self.output_interface.write().await;
         if let Some(neuron) = self.get_neuron(neuron_id).await {
             let receiver = neuron.provide_output().await;
             // let c_receiver = receiver.clone();
@@ -206,23 +206,23 @@ impl Network {
             let c_results = self.results.clone();
             let c_output_interface = self.output_interface.clone();
             let c_port = network_port.clone();
-            g_output_interface.insert(network_port.clone(), receiver);
+            w_output_interface.insert(network_port.clone(), receiver);
             let jh = tokio::task::spawn(async move {
                 let port = Arc::new(c_port);
-                let mut g_port_result_receiver = c_receiver.lock().await;
-                while let Ok(signal) = g_port_result_receiver.recv().await {
-                    let output_width = c_output_interface.lock().await.len();
+                let mut w_port_result_receiver = c_receiver.write().await;
+                while let Ok(signal) = w_port_result_receiver.recv().await {
+                    let output_width = c_output_interface.read().await.len();
                     println!("output_width: {}", output_width);
                     println!("Check Point for {} port with signal {}", port, signal);
                     let mut result: Vec<u8> = vec![0; output_width];
                     // let mut result: Vec<u8> = Vec::with_capacity(output_width);
                     // result.fill(0);
                     result[*port] = signal;
-                    c_results.lock().await.push(result);
+                    c_results.write().await.push(result);
                 }
             });
             self.processing_registers
-                .lock()
+                .write()
                 .await
                 .insert(network_port.clone(), jh);
 
@@ -232,9 +232,9 @@ impl Network {
         }
     }
 
-    pub async fn get_output_receiver(&self, port: usize) -> Option<Arc<Mutex<Receiver<u8>>>> {
+    pub async fn get_output_receiver(&self, port: usize) -> Option<Arc<RwLock<Receiver<u8>>>> {
         self.output_interface
-            .lock()
+            .read()
             .await
             .get(&port)
             .map(|rx| rx.clone())

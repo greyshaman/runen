@@ -11,15 +11,14 @@ use std::sync::Weak;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::Receiver;
 use tokio::sync::broadcast::Sender;
-use tokio::sync::Mutex;
-use tokio::sync::MutexGuard;
+use tokio::sync::RwLock;
+use tokio::sync::RwLockWriteGuard;
 use tokio::task;
-
-use crate::rnn::common::rnn_error::RnnError;
-use crate::rnn::layouts::network::Network;
 
 use super::dendrite::Dendrite;
 use super::dendrite::InputCfg;
+use crate::rnn::common::rnn_error::RnnError;
+use crate::rnn::layouts::network::Network;
 
 #[derive(Debug)]
 pub struct NeuronConfig {
@@ -87,7 +86,7 @@ pub struct NeuronCore {
 pub struct Neuron {
     id: String,
     network: Weak<Network>,
-    core: Arc<Mutex<NeuronCore>>,
+    core: Arc<RwLock<NeuronCore>>,
 }
 
 impl Neuron {
@@ -104,23 +103,23 @@ impl Neuron {
         Neuron {
             id: String::from(id),
             network: Arc::downgrade(&network),
-            core: Arc::new(Mutex::new(core)),
+            core: Arc::new(RwLock::new(core)),
         }
     }
 
-    pub async fn receive(core: &Arc<Mutex<NeuronCore>>, signal: u8, port: usize) {
-        let mut g_core = core.lock().await;
+    pub async fn receive(core: &Arc<RwLock<NeuronCore>>, signal: u8, port: usize) {
+        let mut w_core = core.write().await;
         {
-            g_core.hit_counter += 1;
+            w_core.hit_counter += 1;
         }
 
-        let input = g_core.dendrites.get_mut(&port).unwrap();
+        let input = w_core.dendrites.get_mut(&port).unwrap();
 
         let signal = Self::synapse_accept_signal(input, signal);
 
         let signal: i16 = Self::dendrite_weighting_signal(input, signal);
         // Neurosoma responsibility
-        Self::neurosome_process_signal(g_core, signal, port);
+        Self::neurosome_process_signal(w_core, signal, port);
     }
 
     /// Send only positive signal otherwise suppress transmission. Need to stop endless looping zero signals
@@ -147,10 +146,10 @@ impl Neuron {
 
     /// Config new neuron
     pub async fn config(&self, settings: Vec<InputCfg>) {
-        let mut g_core = self.core.lock().await;
-        g_core.dendrites.clear();
-        g_core.input_hits.clear();
-        g_core.accumulator = 1;
+        let mut w_core = self.core.write().await;
+        w_core.dendrites.clear();
+        w_core.input_hits.clear();
+        w_core.accumulator = 1;
         for (port, i_cfg) in settings.iter().enumerate() {
             let dendrite = Dendrite {
                 config: InputCfg {
@@ -162,24 +161,24 @@ impl Neuron {
                 connected: None,
                 input: None,
             };
-            g_core.dendrites.insert(port, dendrite);
+            w_core.dendrites.insert(port, dendrite);
         }
     }
 
     /// Provides access to a channel (axon) for receiving signals from a given neuron.
-    pub async fn provide_output(&self) -> Arc<Mutex<Receiver<u8>>> {
+    pub async fn provide_output(&self) -> Arc<RwLock<Receiver<u8>>> {
         let rx = {
-            let mut core_guard = self.core.lock().await;
-            core_guard.axon.clone().as_deref().map_or_else(
+            let mut w_core = self.core.write().await;
+            w_core.axon.clone().as_deref().map_or_else(
                 || {
                     let (tx, rx) = broadcast::channel::<u8>(5);
-                    core_guard.axon = Arc::new(Some(Arc::new(tx)));
+                    w_core.axon = Arc::new(Some(Arc::new(tx)));
                     rx
                 },
                 |tx| tx.subscribe(),
             )
         };
-        Arc::new(Mutex::new(rx))
+        Arc::new(RwLock::new(rx))
     }
 
     /// Link to a specific input (synapse) of a neuron.
@@ -189,8 +188,8 @@ impl Neuron {
         let out = self.provide_output().await;
         let party_id = party.get_id();
         if party_id == self.id {
-            let g_core = self.core.lock().await;
-            let dendrites = &g_core.dendrites;
+            let r_core = self.core.read().await;
+            let dendrites = &r_core.dendrites;
             let self_connected_dendrites_count = dendrites
                 .iter()
                 .filter(|(_, d)| {
@@ -199,7 +198,7 @@ impl Neuron {
                         .is_some_and(|connected| connected.to_string() == self.id)
                 })
                 .count();
-            if g_core.dendrites.len() < 2 || self_connected_dendrites_count > 0_usize {
+            if r_core.dendrites.len() < 2 || self_connected_dendrites_count > 0_usize {
                 return Err(Box::new(RnnError::ClosedLoop));
             }
         }
@@ -210,11 +209,11 @@ impl Neuron {
         &self,
         src_id: &str,
         port: usize,
-        receiver: Arc<Mutex<Receiver<u8>>>,
+        receiver: Arc<RwLock<Receiver<u8>>>,
     ) -> Result<(), Box<dyn Error>> {
         {
-            let mut core_guard = self.core.lock().await;
-            if let Some(dendrite) = core_guard.dendrites.get_mut(&port) {
+            let mut w_core = self.core.write().await;
+            if let Some(dendrite) = w_core.dendrites.get_mut(&port) {
                 if dendrite.connected.is_none() {
                     dendrite.connected = Some(src_id.to_string());
                     dendrite.syn_capacity = dendrite.config.capacity_max;
@@ -234,8 +233,8 @@ impl Neuron {
         {
             let core_cloned = Arc::clone(&self.core);
             let input_opt = {
-                let core_guard = self.core.lock().await;
-                core_guard
+                let r_core = self.core.read().await;
+                r_core
                     .dendrites
                     .get(&port)
                     .and_then(|dendrite| dendrite.input.clone())
@@ -244,8 +243,8 @@ impl Neuron {
             if let Some(synapse) = input_opt {
                 let synapse_cloned = Arc::clone(&synapse);
                 let _task_handler = task::spawn(async move {
-                    let mut synapse_guard = synapse_cloned.lock().await;
-                    while let Ok(signal) = synapse_guard.recv().await {
+                    let mut w_synapse = synapse_cloned.write().await;
+                    while let Ok(signal) = w_synapse.recv().await {
                         Self::receive(&core_cloned, signal, port).await;
                     }
                 });
@@ -265,24 +264,24 @@ impl Neuron {
     }
 
     pub async fn get_input_ports_len(&self) -> usize {
-        self.core.lock().await.dendrites.len()
+        self.core.read().await.dendrites.len()
     }
 
     /// Request neuron state.
     pub async fn get_state(&self) -> NeuronState {
-        let g_core = self.core.lock().await;
-        let dendrite_count = g_core.dendrites.len();
-        let dendrite_connected_count = Self::get_connected_input_ports_len(&g_core.dendrites);
-        let dendrite_hit_count = g_core.input_hits.len();
-        let accumulator = g_core.accumulator;
-        let receiver_count = if let Some(axon) = g_core.axon.as_ref() {
+        let r_core = self.core.read().await;
+        let dendrite_count = r_core.dendrites.len();
+        let dendrite_connected_count = Self::get_connected_input_ports_len(&r_core.dendrites);
+        let dendrite_hit_count = r_core.input_hits.len();
+        let accumulator = r_core.accumulator;
+        let receiver_count = if let Some(axon) = r_core.axon.as_ref() {
             axon.receiver_count()
         } else {
             0
         };
-        let reset_count = g_core.reset_counter;
-        let hit_count = g_core.hit_counter;
-        let total_weight = g_core.dendrites.values().map(|d| d.config.weight).sum();
+        let reset_count = r_core.reset_counter;
+        let hit_count = r_core.hit_counter;
+        let total_weight = r_core.dendrites.values().map(|d| d.config.weight).sum();
 
         NeuronState {
             id: self.id.clone(),
@@ -322,27 +321,31 @@ impl Neuron {
     }
 
     #[inline]
-    fn neurosome_process_signal(mut g_core: MutexGuard<NeuronCore>, signal: i16, port: usize) {
-        if g_core.input_hits.contains(&port) {
-            let new_signal = max(g_core.accumulator, 0) as u8;
-            g_core.accumulator = signal + 1;
-            g_core.reset_counter += 1;
-            g_core.input_hits.clear();
-            g_core.input_hits.insert(port);
-            g_core
+    fn neurosome_process_signal(
+        mut w_core: RwLockWriteGuard<NeuronCore>,
+        signal: i16,
+        port: usize,
+    ) {
+        if w_core.input_hits.contains(&port) {
+            let new_signal = max(w_core.accumulator, 0) as u8;
+            w_core.accumulator = signal + 1;
+            w_core.reset_counter += 1;
+            w_core.input_hits.clear();
+            w_core.input_hits.insert(port);
+            w_core
                 .axon
                 .as_ref()
                 .clone()
                 .map(|axon| Self::send(Arc::clone(&axon), new_signal));
         } else {
-            g_core.accumulator += signal as i16;
-            g_core.input_hits.insert(port);
-            if g_core.input_hits.len() >= Self::get_connected_input_ports_len(&g_core.dendrites) {
-                let new_signal = max(g_core.accumulator, 0) as u8;
-                g_core.accumulator = 1;
-                g_core.reset_counter += 1;
-                g_core.input_hits.clear();
-                g_core
+            w_core.accumulator += signal as i16;
+            w_core.input_hits.insert(port);
+            if w_core.input_hits.len() >= Self::get_connected_input_ports_len(&w_core.dendrites) {
+                let new_signal = max(w_core.accumulator, 0) as u8;
+                w_core.accumulator = 1;
+                w_core.reset_counter += 1;
+                w_core.input_hits.clear();
+                w_core
                     .axon
                     .as_ref()
                     .clone()
@@ -395,9 +398,9 @@ mod tests {
             let net = Arc::new(new_network_fixture());
             let neuron = new_neuron_fixture(net.clone(), vec![]).await;
 
-            let g_core = neuron.core.lock().await;
+            let r_core = neuron.core.read().await;
 
-            assert_eq!(Neuron::get_connected_input_ports_len(&g_core.dendrites), 0);
+            assert_eq!(Neuron::get_connected_input_ports_len(&r_core.dendrites), 0);
         }
 
         #[tokio::test]
@@ -449,17 +452,16 @@ mod tests {
             let receiver_orig = neuron.provide_output().await;
 
             {
-                let g_core = neuron.core.lock().await;
-                let axon_opt = g_core.axon.as_ref().clone();
+                let r_core = neuron.core.read().await;
+                let axon_opt = r_core.axon.as_ref().clone();
 
                 assert!(axon_opt.is_some());
 
                 let axon = axon_opt.unwrap();
                 let receiver = receiver_orig.clone();
-                let mut g_rx = receiver.lock().await;
-                // let rx = *g_rx;
+                let mut w_rx = receiver.write().await;
                 let res = axon.send(7);
-                if let Ok(rx_signal) = g_rx.recv().await {
+                if let Ok(rx_signal) = w_rx.recv().await {
                     assert_eq!(rx_signal, 7);
                 }
                 assert!(res.is_ok());
@@ -475,14 +477,14 @@ mod tests {
             let neuron = new_neuron_fixture(net.clone(), vec![]).await;
 
             let monitor = neuron.provide_output().await;
-            let mut monitor = monitor.lock().await;
+            let mut w_monitor = monitor.write().await;
 
             let (tx, rx) = broadcast::channel(2);
-            let res = neuron.connect("M0I0", 0, Arc::new(Mutex::new(rx))).await;
+            let res = neuron.connect("M0I0", 0, Arc::new(RwLock::new(rx))).await;
             assert!(res.is_ok());
 
             let res = tx.send(1);
-            if let Ok(rx_signal) = monitor.recv().await {
+            if let Ok(rx_signal) = w_monitor.recv().await {
                 assert_eq!(rx_signal, 2); // Signal is 2 because neuron add 1 as activity level
             }
             assert!(res.is_ok());
@@ -501,18 +503,18 @@ mod tests {
             let neuron2 = new_neuron_fixture(net.clone(), vec![]).await;
 
             let monitor = neuron2.provide_output().await;
-            let mut monitor = monitor.lock().await;
+            let mut w_monitor = monitor.write().await;
 
             let (tx, rx) = broadcast::channel(1);
             assert!(neuron1
-                .connect("M0I0", 0, Arc::new(Mutex::new(rx)))
+                .connect("M0I0", 0, Arc::new(RwLock::new(rx)))
                 .await
                 .is_ok());
 
             assert!(neuron1.link_to(neuron2.clone(), 0).await.is_ok());
 
             let res = tx.send(1);
-            if let Ok(rx_signal) = monitor.recv().await {
+            if let Ok(rx_signal) = w_monitor.recv().await {
                 assert_eq!(rx_signal, 2);
             }
             assert!(res.is_ok());
