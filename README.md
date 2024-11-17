@@ -1,6 +1,6 @@
 # RuNeN - (Rust Neural Network)
 
-<img src="https://github.com/greyshaman/runen/raw/refs/heads/dev/images/neuro_mech_3d_l.webp" width="50%" alt="Runen Logo">
+<center><img src="https://github.com/greyshaman/runen/raw/refs/heads/dev/images/neuro_mech_3d_l.webp" width="50%" alt="Runen Logo"></center>
 
 
 Цель этого проекта — создать модель, которая моделирует работу естественной нейронной сети, подобной той, что функционирует в человеческом мозгу. Мы хотим понять, как работает логика в таких нейронных сетях, и изучить различия между искусственными и естественными нейронными сетями в рамках модели.
@@ -13,7 +13,8 @@
   - [Модель нейросети](#модель-нейросети)
 - [Зависимости](#зависимости)
 - [Как использовать](#как-использовать)
-- [Список развития](#список-развития)
+  - [Создание нейросети](#создание-нейросети)
+- [Чек лист](#чек-лист)
 
 ---
 
@@ -23,6 +24,7 @@
   - [The Neural Network Model](#the-neural-network-model)
 - [Dependencies](#dependencies)
 - [Howto use](#howto-use)
+  - [Creating a neural network](#creating-a-neural-network)
 - [Todo](#todo)
 
 ## Описание
@@ -55,18 +57,26 @@
 
 ## Как использовать
 
-(Секция в процессе заполнения)
+Чтобы использовать нейронную сеть, до реализации процесса обучения сеть необходимо настроить вручную.
 
-## Список развития
+### Создание нейросети
 
-- Добавить интеграционные тесты.
-- Улучшить взаимодействие с сетевыми интерфейсами.
-- Добавить бенчмарки и профилировать код.
-- Добавить чтение/запись конфигурации: использовать serde.
-- Реализовать обучение сети.
-- Разработать управляющую систему, которая будет управлять сетями (Создание, обучение, взаимодействие сетей).
-- Визуализировать процесс работы сети.
-- Добавить реализацию нейронной сети, использующую тензорные представления данных.
+... В процессе создания ...
+
+## Чек лист
+
+- [x] ~~разработать модель биологической нейросети.~~
+- [x] ~~сделать синхроyную реализацию модели.~~
+- [x] ~~Сделать асинхронную реализацию модели~~
+- [x] ~~Добавить юнит тесты.~~
+- [ ] Добавить интеграционные тесты.
+- [ ] Улучшить взаимодействие с интерфейсами нейросети.
+- [ ] Добавить бенчмарки и профилировать код.
+- [ ] Добавить чтение/запись конфигурации: использовать serde.
+- [ ] Реализовать обучение сети.
+- [ ] Разработать управляющую систему, которая будет управлять сетями (Создание, обучение, взаимодействие сетей).
+- [ ] Визуализировать процесс работы сети.
+- [ ] Добавить реализацию нейронной сети, использующую тензорные представления данных.
 
 ---
 
@@ -100,15 +110,24 @@ The axon transmits the positive signal received from the adder to all the synaps
 
 ## Howto use
 
-(The section is currently being filled in)
+To use a neural network, the network must be configured manually before the learning process is implemented.
+
+### Creating a neural network
+
+... under construction ...
+
 
 ## Todo
 
-- Add integration tests to ensure the code works as expected.
-- Improve interaction with network interfaces
-- Profile and benchmark the code to identify any performance issues.
-- Add read/write configuration using serge.
-- Implement network training.
-- To develop a management system that will manage networks (Creation, training, network interaction).
-- Visualize the network operation process.
-- Implement a neural network using tensor representations of data.
+- [x] ~~develop a model of a biological neural network.~~
+- [x] ~~make a synchronous implementation of the model.~~
+- [x] ~~To make an asynchronous implementation of the model~~
+- [x] ~~Add unit tests.~~
+- [ ] Add integration tests.
+- [ ] Improve interaction with neural network interfaces.
+- [ ] Add benchmarks and profile the code.
+- [ ] Add read/write configuration: use serge.
+- [ ] Implement network training.
+- [ ] Develop a management system that will manage networks (Creation, training, networking).
+- [ ] Visualize the network operation process.
+- [ ] Add a neural network implementation using tensor representations of data.
