@@ -18,15 +18,22 @@ use crate::rnn::neural::neuron::{Neuron, NeuronConfig};
 static mut ID_COUNTER: AtomicUsize = AtomicUsize::new(0_usize);
 static CHANNEL_CAPACITY: usize = 5;
 
+#[derive(Debug, Clone)]
+pub enum NetworkMode {
+    Standard,
+    Trace,
+}
+
 /// Network is a high level container to other containers (neurons)
 #[derive(Debug)]
 pub struct Network {
     id: String,
     neurons: RwLock<BTreeMap<String, Arc<Neuron>>>,
+    mode: Arc<RwLock<NetworkMode>>,
     input_interface: Arc<RwLock<BTreeMap<usize, Arc<RwLock<Sender<u8>>>>>>,
     output_interface: Arc<RwLock<BTreeMap<usize, Arc<RwLock<Receiver<u8>>>>>>,
     processing_registers: Arc<RwLock<HashMap<usize, JoinHandle<()>>>>,
-    results: Arc<RwLock<Vec<Vec<u8>>>>,
+    result_log: Arc<RwLock<Vec<Vec<u8>>>>,
 }
 
 impl Network {
@@ -39,11 +46,21 @@ impl Network {
         .map(|id| Network {
             id,
             neurons: RwLock::new(BTreeMap::new()),
+            mode: Arc::new(RwLock::new(NetworkMode::Standard)),
             input_interface: Arc::new(RwLock::new(BTreeMap::new())),
             output_interface: Arc::new(RwLock::new(BTreeMap::new())),
             processing_registers: Arc::new(RwLock::new(HashMap::new())),
-            results: Arc::new(RwLock::new(Vec::new())),
+            result_log: Arc::new(RwLock::new(Vec::new())),
         })
+    }
+
+    pub async fn set_mode(&self, mode: NetworkMode) {
+        let mut w_mode = self.mode.write().await;
+        *w_mode = mode;
+    }
+
+    pub async fn get_mode(&self) -> NetworkMode {
+        self.mode.read().await.clone()
     }
 
     pub async fn get_neuron(&self, id: &str) -> Option<Arc<Neuron>> {
@@ -187,7 +204,7 @@ impl Network {
     }
 
     pub async fn pop_results(&self) -> Vec<Vec<u8>> {
-        let mut w_results = self.results.write().await;
+        let mut w_results = self.result_log.write().await;
         let snapshot = w_results.clone();
         w_results.clear();
         snapshot
@@ -203,7 +220,7 @@ impl Network {
             let receiver = neuron.provide_output().await;
             // let c_receiver = receiver.clone();
             let c_receiver = neuron.provide_output().await;
-            let c_results = self.results.clone();
+            let c_results = self.result_log.clone();
             let c_output_interface = self.output_interface.clone();
             let c_port = network_port.clone();
             w_output_interface.insert(network_port.clone(), receiver);
@@ -212,11 +229,7 @@ impl Network {
                 let mut w_port_result_receiver = c_receiver.write().await;
                 while let Ok(signal) = w_port_result_receiver.recv().await {
                     let output_width = c_output_interface.read().await.len();
-                    println!("output_width: {}", output_width);
-                    println!("Check Point for {} port with signal {}", port, signal);
                     let mut result: Vec<u8> = vec![0; output_width];
-                    // let mut result: Vec<u8> = Vec::with_capacity(output_width);
-                    // result.fill(0);
                     result[*port] = signal;
                     c_results.write().await.push(result);
                 }
