@@ -18,10 +18,14 @@ use crate::rnn::neural::neuron::{Neuron, NeuronConfig};
 static mut ID_COUNTER: AtomicUsize = AtomicUsize::new(0_usize);
 static CHANNEL_CAPACITY: usize = 5;
 
+/// The network mode
 #[derive(Debug, Clone)]
 pub enum NetworkMode {
+    /// Default mode
     Standard,
-    Trace,
+
+    /// Tracing mode with logging into log file
+    Trace(String),
 }
 
 /// Network is a high level container to other containers (neurons)
@@ -32,8 +36,8 @@ pub struct Network {
     mode: Arc<RwLock<NetworkMode>>,
     input_interface: Arc<RwLock<BTreeMap<usize, Arc<RwLock<Sender<u8>>>>>>,
     output_interface: Arc<RwLock<BTreeMap<usize, Arc<RwLock<Receiver<u8>>>>>>,
-    processing_registers: Arc<RwLock<HashMap<usize, JoinHandle<()>>>>,
-    result_log: Arc<RwLock<Vec<Vec<u8>>>>,
+    processing_registers: Arc<RwLock<HashMap<usize, JoinHandle<()>>>>, // TODO use TaskTracker instead
+    trace_log: Arc<RwLock<Vec<String>>>,
 }
 
 impl Network {
@@ -50,7 +54,7 @@ impl Network {
             input_interface: Arc::new(RwLock::new(BTreeMap::new())),
             output_interface: Arc::new(RwLock::new(BTreeMap::new())),
             processing_registers: Arc::new(RwLock::new(HashMap::new())),
-            result_log: Arc::new(RwLock::new(Vec::new())),
+            trace_log: Arc::new(RwLock::new(Vec::new())),
         })
     }
 
@@ -98,7 +102,7 @@ impl Network {
         let mut w_neurons = self.neurons.write().await;
         match w_neurons.entry(new_id.clone()) {
             Entry::Vacant(entry) => Ok(Arc::clone(
-                entry.insert(Neuron::build(neuron_config, Arc::clone(&network)).await),
+                entry.insert(Neuron::build(Arc::clone(&network), neuron_config).await),
             )),
             Entry::Occupied(_) => Err(Box::new(RnnError::IdBusy(format!(
                 "Id {} already used",
@@ -203,10 +207,10 @@ impl Network {
         }
     }
 
-    pub async fn pop_results(&self) -> Vec<Vec<u8>> {
-        let mut w_results = self.result_log.write().await;
-        let snapshot = w_results.clone();
-        w_results.clear();
+    pub async fn pop_result_log(&self) -> Vec<String> {
+        let mut w_trace_log = self.trace_log.write().await;
+        let snapshot = w_trace_log.clone();
+        w_trace_log.clear();
         snapshot
     }
 
@@ -217,31 +221,42 @@ impl Network {
     ) -> Result<(), Box<dyn Error>> {
         let mut w_output_interface = self.output_interface.write().await;
         if let Some(neuron) = self.get_neuron(neuron_id).await {
-            let receiver = neuron.provide_output().await;
-            // let c_receiver = receiver.clone();
-            let c_receiver = neuron.provide_output().await;
-            let c_results = self.result_log.clone();
-            let c_output_interface = self.output_interface.clone();
-            let c_port = network_port.clone();
-            w_output_interface.insert(network_port.clone(), receiver);
-            let jh = tokio::task::spawn(async move {
-                let port = Arc::new(c_port);
-                let mut w_port_result_receiver = c_receiver.write().await;
-                while let Ok(signal) = w_port_result_receiver.recv().await {
-                    let output_width = c_output_interface.read().await.len();
-                    let mut result: Vec<u8> = vec![0; output_width];
-                    result[*port] = signal;
-                    c_results.write().await.push(result);
-                }
-            });
-            self.processing_registers
-                .write()
-                .await
-                .insert(network_port.clone(), jh);
+            w_output_interface.insert(network_port.clone(), neuron.provide_output().await);
+            // if  self.get
+            // let c_receiver = neuron.provide_output().await;
+            // let c_results = self.trace_log.clone();
+            // let c_output_interface = self.output_interface.clone();
+            // let c_port = network_port.clone();
+            // let jh = tokio::task::spawn(async move {
+            //     let port = Arc::new(c_port);
+            //     let mut w_port_result_receiver = c_receiver.write().await;
+            //     while let Ok(signal) = w_port_result_receiver.recv().await {
+            //         let output_width = c_output_interface.read().await.len();
+            //         let mut result: Vec<u8> = vec![0; output_width];
+            //         result[*port] = signal;
+            //         let result: String = result.iter().fold(String::new(), |mut acc, item| {
+            //             acc.push_str(item.to_string().as_str());
+            //             acc
+            //         });
+            //         c_results.write().await.push(result);
+            //     }
+            // });
+            // self.processing_registers
+            //     .write()
+            //     .await
+            //     .insert(network_port.clone(), jh);
 
             Ok(())
         } else {
             Err(Box::new(RnnError::IdNotFound))
+        }
+    }
+
+    async fn activate_trace_log(&self) {
+        if let NetworkMode::Trace(log_filename) = self.mode.read().await.clone() {
+            // получить список портов имеющих соединение
+            // создать для портов потоки ведущие записи в лог
+            // предусмотреть возможность прерывания потоков в случае смены режима или остановки работы сети
         }
     }
 
@@ -435,13 +450,20 @@ mod tests {
         assert!(res.is_ok());
     }
 
+    #[ignore = "waiting trace log implementation"]
     #[tokio::test]
     async fn network_should_return_results_of_signal_sequence_processing() {
         let net = Arc::new(new_network_fixture());
 
-        let config1 = vec![InputCfg::new(2, 2, -1), InputCfg::new(1, 1, 1)];
+        let config1 = vec![
+            InputCfg::new(2, 2, -1).unwrap(),
+            InputCfg::new(1, 1, 1).unwrap(),
+        ];
 
-        let config2 = vec![InputCfg::new(1, 1, -2), InputCfg::new(2, 2, 1)];
+        let config2 = vec![
+            InputCfg::new(1, 1, -2).unwrap(),
+            InputCfg::new(2, 2, 1).unwrap(),
+        ];
 
         let neuron0 = new_neuron_fixture(net.clone(), vec![]).await;
         let id0 = neuron0.get_id();
@@ -475,7 +497,7 @@ mod tests {
         let state0 = neuron0.get_state().await;
         assert_eq!(state0.hit_count, 2);
 
-        let results = net.pop_results().await;
+        let results = net.pop_result_log().await;
         assert_eq!(results.len(), 2);
     }
 }

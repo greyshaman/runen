@@ -18,7 +18,10 @@ async fn generate_net(net: Arc<Network>) {
     let neuron1 = net
         .create_neuron(
             net.clone(),
-            vec![InputCfg::new(2, 2, -1), InputCfg::new(1, 1, 1)],
+            vec![
+                InputCfg::new(2, 2, -1).unwrap(),
+                InputCfg::new(1, 1, 1).unwrap(),
+            ],
         )
         .await
         .unwrap();
@@ -27,7 +30,10 @@ async fn generate_net(net: Arc<Network>) {
     let neuron2 = net
         .create_neuron(
             net.clone(),
-            vec![InputCfg::new(1, 1, -2), InputCfg::new(2, 2, 1)],
+            vec![
+                InputCfg::new(1, 1, -2).unwrap(),
+                InputCfg::new(2, 2, 1).unwrap(),
+            ],
         )
         .await
         .unwrap();
@@ -85,6 +91,6 @@ async fn main() {
     assert!(net.input(1, 0).await.is_ok());
     sleep(Duration::from_millis(1)).await;
 
-    let results = net.pop_results().await;
-    println!("results: {:?}", results);
+    // let results = net.pop_result_log().await;
+    // println!("results: {:?}", results);
 }
