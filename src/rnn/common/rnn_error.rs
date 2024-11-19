@@ -26,6 +26,12 @@ pub enum RnnError {
 
     /// When connection to self not allowed
     ClosedLoop,
+
+    /// Happened when sending signal suppressed. Needed to logging in trace log.
+    SignalSuppressed,
+
+    /// Indicate then signal sending into channel whit no one receivers
+    SignalSendError,
 }
 
 impl std::fmt::Display for RnnError {
