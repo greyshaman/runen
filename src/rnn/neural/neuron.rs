@@ -14,6 +14,8 @@ use tokio::sync::broadcast::Sender;
 use tokio::sync::RwLock;
 use tokio::sync::RwLockWriteGuard;
 use tokio::task;
+use tokio::task::JoinHandle;
+use tokio_util::task::TaskTracker;
 
 use super::dendrite::Dendrite;
 use super::dendrite::InputCfg;
@@ -80,6 +82,9 @@ pub struct NeuronCore {
     /// The accumulated result is transmitted through the axon using
     /// a broadcast channel and sent to other recipients.
     axon: Arc<Option<Arc<Sender<u8>>>>,
+
+    task_tracker: TaskTracker,
+    task_handlers: HashMap<usize, JoinHandle<()>>,
 }
 
 #[derive(Debug)]
@@ -99,6 +104,8 @@ impl Neuron {
             dendrites: HashMap::new(),
             input_hits: HashSet::new(),
             axon: Arc::new(None),
+            task_tracker: TaskTracker::new(),
+            task_handlers: HashMap::new(),
         };
         Neuron {
             id: String::from(id),
@@ -113,28 +120,28 @@ impl Neuron {
             w_core.hit_counter += 1;
         }
 
-        let input = w_core.dendrites.get_mut(&port).unwrap();
+        if let Some(input) = w_core.dendrites.get_mut(&port) {
+            let signal = Self::synapse_accept_signal(input, signal);
 
-        let signal = Self::synapse_accept_signal(input, signal);
+            let signal: i16 = Self::dendrite_weighting_signal(input, signal);
 
-        let signal: i16 = Self::dendrite_weighting_signal(input, signal);
-        // Neurosoma responsibility
-        Self::neurosome_process_signal(w_core, signal, port);
+            Self::neurosome_process_signal(w_core, signal, port);
+        }
+
     }
 
     /// Send only positive signal otherwise suppress transmission. Need to stop endless looping zero signals
     pub fn send(axon: Arc<Sender<u8>>, signal: u8) -> usize {
-        let mut count: usize = 0;
         if signal > 0 {
-            let sends = axon.send(signal).unwrap();
-            count += sends;
+            axon.send(signal).unwrap()
+        } else {
+            0
         }
-        count
     }
 
     /// Creates a new neuron with all the necessary components
     /// in the specified configuration.
-    pub async fn build(config: NeuronConfig, network: Arc<Network>) -> Arc<Neuron> {
+    pub async fn build(network: Arc<Network>, config: NeuronConfig) -> Arc<Neuron> {
         let NeuronConfig { id, input_configs } = config;
         let neuron = Neuron::new(&id, network);
         neuron.config(input_configs).await;
@@ -242,7 +249,7 @@ impl Neuron {
 
             if let Some(synapse) = input_opt {
                 let synapse_cloned = Arc::clone(&synapse);
-                let _task_handler = task::spawn(async move {
+                let task_handler = task::spawn(async move {
                     let mut w_synapse = synapse_cloned.write().await;
                     while let Ok(signal) = w_synapse.recv().await {
                         Self::receive(&core_cloned, signal, port).await;
