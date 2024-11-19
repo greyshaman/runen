@@ -32,6 +32,9 @@ pub enum RnnError {
 
     /// Indicate then signal sending into channel whit no one receivers
     SignalSendError,
+
+    /// Not connected axon
+    DeadEndAxon,
 }
 
 impl std::fmt::Display for RnnError {

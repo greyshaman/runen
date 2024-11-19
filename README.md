@@ -102,9 +102,9 @@ let neuron = net.create_neuron(net.clone(), neuron_input_cfg)
 .... create net instance ....
 
 let neuron_input_cfg = vec![
-  InputCfg::new(1, 1, -1),
-  InputCfg::new(2, 2, 1),
-  InputCfg::new(1, 1, 1)
+  InputCfg::new(1, 1, -1).unwrap(),
+  InputCfg::new(2, 2, 1).unwrap(),
+  InputCfg::new(1, 1, 1).unwrap()
 ];
 let neuron = net.create_neuron(net.clone(), neuron_input_cfg)
   .await
@@ -128,8 +128,8 @@ let neuron_1 = net.create_neuron(net.clone(), vec![]).await.unwrap();
 let src_id = neuron_1.get_id();
 
 let neuron_2 = net.create_neuron(net.clone(), vec![
-  InputCfg::new(1, 1, 1),
-  InputCfg::new(2, 1, -1)
+  InputCfg::new(1, 1, 1).unwrap(),
+  InputCfg::new(2, 1, -1).unwrap()
 ])
   .await
   .unwrap();
@@ -150,8 +150,8 @@ assert!(net.connect_neurons(&src_id, &dst_id, 1).await.is_ok());
 let net = Arc::new(Network::new());
 
 let neuron = net.create_neuron(net.clone(), vec![
-  InputCfg::new(1, 1, 1),
-  InputCfg::new(2, 1, -1)
+  InputCfg::new(1, 1, 1).unwrap(),
+  InputCfg::new(2, 1, -1).unwrap()
 ])
   .await
   .unwrap();
@@ -288,9 +288,9 @@ In the case when you need to specify several inputs at once, you can do this:
 .... create net instance ....
 
 let neuron_input_cfg = vec![
-  InputCfg::new(1, 1, -1),
-  InputCfg::new(2, 2, 1),
-  InputCfg::new(1, 1, 1)
+  InputCfg::new(1, 1, -1).unwrap(),
+  InputCfg::new(2, 2, 1).unwrap(),
+  InputCfg::new(1, 1, 1).unwrap()
 ];
 let neuron = net.create_neuron(net.clone(), neuron_input_cfg)
   .await
@@ -314,8 +314,8 @@ let neuron_1 = net.create_neuron(net.clone(), vec![]).await.unwrap();
 let src_id = neuron_1.get_id();
 
 let neuron_2 = net.create_neuron(net.clone(), vec![
-  InputCfg::new(1, 1, 1),
-  InputCfg::new(2, 1, -1)
+  InputCfg::new(1, 1, 1).unwrap(),
+  InputCfg::new(2, 1, -1).unwrap()
 ])
   .await
   .unwrap();
@@ -336,8 +336,8 @@ Here `network_port` is the number of the input port, `neuron_id` is the identifi
 let net = Arc::new(Network::new());
 
 let neuron = net.create_neuron(net.clone(), vec![
-  InputCfg::new(1, 1, 1),
-  InputCfg::new(2, 1, -1)
+  InputCfg::new(1, 1, 1).unwrap(),
+  InputCfg::new(2, 1, -1).unwrap()
 ])
   .await
   .unwrap();

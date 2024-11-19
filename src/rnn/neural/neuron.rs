@@ -2,6 +2,7 @@
 
 use std::cmp::max;
 use std::cmp::min;
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::error::Error;
@@ -13,7 +14,6 @@ use tokio::sync::broadcast::Receiver;
 use tokio::sync::broadcast::Sender;
 use tokio::sync::RwLock;
 use tokio::sync::RwLockWriteGuard;
-use tokio::task;
 use tokio::task::JoinHandle;
 use tokio_util::task::TaskTracker;
 
@@ -114,7 +114,11 @@ impl Neuron {
         }
     }
 
-    pub async fn receive(core: &Arc<RwLock<NeuronCore>>, signal: u8, port: usize) {
+    pub async fn receive(
+        core: &Arc<RwLock<NeuronCore>>,
+        signal: u8,
+        port: usize,
+    ) -> Result<(), Box<dyn Error>> {
         let mut w_core = core.write().await;
         {
             w_core.hit_counter += 1;
@@ -125,17 +129,19 @@ impl Neuron {
 
             let signal: i16 = Self::dendrite_weighting_signal(input, signal);
 
-            Self::neurosome_process_signal(w_core, signal, port);
+            Self::process_signal(w_core, signal, port)
+        } else {
+            Err(Box::new(RnnError::IdNotFound))
         }
-
     }
 
     /// Send only positive signal otherwise suppress transmission. Need to stop endless looping zero signals
-    pub fn send(axon: Arc<Sender<u8>>, signal: u8) -> usize {
+    pub fn send(axon: Arc<Sender<u8>>, signal: u8) -> Result<usize, Box<dyn Error>> {
         if signal > 0 {
-            axon.send(signal).unwrap()
+            axon.send(signal)
+                .map_err(|_| Box::new(RnnError::SignalSendError) as Box<dyn Error>)
         } else {
-            0
+            Err(Box::new(RnnError::SignalSuppressed))
         }
     }
 
@@ -166,7 +172,7 @@ impl Neuron {
                 },
                 syn_capacity: i_cfg.capacity_max,
                 connected: None,
-                input: None,
+                synapse: None,
             };
             w_core.dendrites.insert(port, dendrite);
         }
@@ -219,44 +225,53 @@ impl Neuron {
         receiver: Arc<RwLock<Receiver<u8>>>,
     ) -> Result<(), Box<dyn Error>> {
         {
+            // exclusive lock core
             let mut w_core = self.core.write().await;
+
+            // try get synapse by port number
             if let Some(dendrite) = w_core.dendrites.get_mut(&port) {
+                // check if synapse not connected yet
                 if dendrite.connected.is_none() {
+                    // Store connection party id
                     dendrite.connected = Some(src_id.to_string());
+
+                    // Set synapse current capacity
                     dendrite.syn_capacity = dendrite.config.capacity_max;
-                    // dendrite.input = Some(Arc::clone(&receiver));
-                    dendrite.input = Some(receiver);
+
+                    // Set receiver half of connecting channel
+                    dendrite.synapse = Some(receiver.clone());
+
+                    let synapse = receiver.clone();
+                    let core_cloned = self.core.clone();
+
+                    // Check if already has task_handler at specified port number
+                    if let Entry::Occupied(task_entry) = w_core.task_handlers.entry(port) {
+                        let task_handler = task_entry.get();
+                        // abort listener task
+                        task_handler.abort();
+
+                        // clear entry
+                        task_entry.remove();
+                    }
+                    let task_handler = w_core.task_tracker.spawn(async move {
+                        let mut w_synapse = synapse.write().await;
+                        while let Ok(signal) = w_synapse.recv().await {
+                            let write_me_into_log = Self::receive(&core_cloned, signal, port).await;
+                        }
+                    });
+
+                    w_core.task_handlers.insert(port, task_handler);
+
+                    Ok(())
                 } else {
-                    return Err(Box::new(RnnError::IdBusy(format!(
+                    // Synapse already has connection then notify about it
+                    Err(Box::new(RnnError::IdBusy(format!(
                         "input port {} already connected",
                         port
-                    ))));
+                    ))))
                 }
             } else {
-                return Err(Box::new(RnnError::IdNotFound));
-            }
-        }
-
-        {
-            let core_cloned = Arc::clone(&self.core);
-            let input_opt = {
-                let r_core = self.core.read().await;
-                r_core
-                    .dendrites
-                    .get(&port)
-                    .and_then(|dendrite| dendrite.input.clone())
-            };
-
-            if let Some(synapse) = input_opt {
-                let synapse_cloned = Arc::clone(&synapse);
-                let task_handler = task::spawn(async move {
-                    let mut w_synapse = synapse_cloned.write().await;
-                    while let Ok(signal) = w_synapse.recv().await {
-                        Self::receive(&core_cloned, signal, port).await;
-                    }
-                });
-                Ok(())
-            } else {
+                // Neuron does not have input with specified port number
                 Err(Box::new(RnnError::IdNotFound))
             }
         }
@@ -328,35 +343,68 @@ impl Neuron {
     }
 
     #[inline]
-    fn neurosome_process_signal(
+    fn process_signal(
         mut w_core: RwLockWriteGuard<NeuronCore>,
         signal: i16,
         port: usize,
-    ) {
+    ) -> Result<(), Box<dyn Error>> {
         if w_core.input_hits.contains(&port) {
-            let new_signal = max(w_core.accumulator, 0) as u8;
+            // The Repeat signal case
+            // A signal is being prepared for output through the axon
+            let output_signal = max(w_core.accumulator, 0) as u8;
+
+            // Reset accumulator with new signal plus excitation level
             w_core.accumulator = signal + 1;
+
+            // Increment neuron resets counter
             w_core.reset_counter += 1;
+
+            // Reset hits register
             w_core.input_hits.clear();
+
+            // Store fact of signal hit to current port
             w_core.input_hits.insert(port);
-            w_core
-                .axon
-                .as_ref()
-                .clone()
-                .map(|axon| Self::send(Arc::clone(&axon), new_signal));
+
+            // check if axon has connections
+            if let Some(axon) = w_core.axon.as_ref().clone() {
+                // send output signal through the axon
+                Self::send(axon.clone(), output_signal).map(|_| ())
+            } else {
+                // Axon does not have any connections
+                Err(Box::new(RnnError::DeadEndAxon))
+            }
         } else {
+            // Add signal value to accumulator
             w_core.accumulator += signal as i16;
+
+            // Store fact of signal hit to current port
             w_core.input_hits.insert(port);
+
+            // Check if all activated synapses had signal hits
             if w_core.input_hits.len() >= Self::get_connected_input_ports_len(&w_core.dendrites) {
-                let new_signal = max(w_core.accumulator, 0) as u8;
+                // All activated synapses received signals
+                // A signal is being prepared for output through the axon
+                let output_signal = max(w_core.accumulator, 0) as u8;
+
+                // Reset accumulator
                 w_core.accumulator = 1;
+
+                // Increment neuron resets counter
                 w_core.reset_counter += 1;
+
+                // Reset hits register
                 w_core.input_hits.clear();
-                w_core
-                    .axon
-                    .as_ref()
-                    .clone()
-                    .map(|axon| Self::send(Arc::clone(&axon), new_signal));
+
+                // check if axon has connections
+                if let Some(axon) = w_core.axon.as_ref().clone() {
+                    // send output signal through the axon
+                    Self::send(axon.clone(), output_signal).map(|_| ())
+                } else {
+                    // Axon does not have any connections
+                    Err(Box::new(RnnError::DeadEndAxon))
+                }
+            } else {
+                Ok(())
             }
         }
     }

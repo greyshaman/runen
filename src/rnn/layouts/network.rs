@@ -455,9 +455,15 @@ mod tests {
     async fn network_should_return_results_of_signal_sequence_processing() {
         let net = Arc::new(new_network_fixture());
 
-        let config1 = vec![InputCfg::new(2, 2, -1), InputCfg::new(1, 1, 1)];
+        let config1 = vec![
+            InputCfg::new(2, 2, -1).unwrap(),
+            InputCfg::new(1, 1, 1).unwrap(),
+        ];
 
-        let config2 = vec![InputCfg::new(1, 1, -2), InputCfg::new(2, 2, 1)];
+        let config2 = vec![
+            InputCfg::new(1, 1, -2).unwrap(),
+            InputCfg::new(2, 2, 1).unwrap(),
+        ];
 
         let neuron0 = new_neuron_fixture(net.clone(), vec![]).await;
         let id0 = neuron0.get_id();

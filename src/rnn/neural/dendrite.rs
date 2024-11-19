@@ -30,7 +30,7 @@ pub struct Dendrite {
     pub connected: Option<String>,
 
     /// Receiver part of channel between axon and synapse
-    pub input: Option<Arc<RwLock<Receiver<u8>>>>,
+    pub synapse: Option<Arc<RwLock<Receiver<u8>>>>,
 }
 
 impl InputCfg {
@@ -38,13 +38,11 @@ impl InputCfg {
         if regeneration > capacity_max {
             Err(Box::new(RnnError::NotSupportedArgValue))
         } else {
-            Ok(
-                InputCfg {
-                    capacity_max,
-                    regeneration,
-                    weight,
-                }
-            )
+            Ok(InputCfg {
+                capacity_max,
+                regeneration,
+                weight,
+            })
         }
     }
 }
