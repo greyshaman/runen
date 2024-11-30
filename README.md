@@ -207,7 +207,7 @@ let jh0 = tokio::task::spawn(async move{
 - [x] ~~сделать синхронную реализацию модели.~~
 - [x] ~~Сделать асинхронную реализацию модели~~
 - [x] ~~Добавить юнит тесты.~~
-- [ ] Добавить интеграционные тесты.
+- [x] ~~Добавить интеграционные тесты.~~
 - [ ] Улучшить взаимодействие с интерфейсами нейросети.
 - [ ] Добавить бенчмарки и профилировать код.
 - [ ] Добавить чтение/запись конфигурации: использовать serde.
@@ -393,7 +393,7 @@ In this fragment, the axon of one of the neurons is assigned as the first output
 - [x] ~~make a synchronous implementation of the model.~~
 - [x] ~~To make an asynchronous implementation of the model~~
 - [x] ~~Add unit tests.~~
-- [ ] Add integration tests.
+- [x] ~~Add integration tests.~~
 - [ ] Improve interaction with neural network interfaces.
 - [ ] Add benchmarks and profile the code.
 - [ ] Add read/write configuration: use serge.
