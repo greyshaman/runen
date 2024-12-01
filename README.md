@@ -396,7 +396,7 @@ In this fragment, the axon of one of the neurons is assigned as the first output
 - [x] ~~Add integration tests.~~
 - [ ] Improve interaction with neural network interfaces.
 - [ ] Add benchmarks and profile the code.
-- [ ] Add read/write configuration: use serge.
+- [ ] Add read/write configuration: use serde.
 - [ ] Implement network training.
 - [ ] Develop a management system that will manage networks (Creation, training, networking).
 - [ ] Visualize the network operation process.
