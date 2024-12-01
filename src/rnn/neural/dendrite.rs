@@ -1,11 +1,12 @@
 use std::{error::Error, sync::Arc};
 
+use serde::{Deserialize, Serialize};
 use tokio::sync::{broadcast::Receiver, RwLock};
 
 use crate::rnn::common::rnn_error::RnnError;
 
 /// Input configuration
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct InputCfg {
     /// High limit of synapse (input) capacity
     pub capacity_max: u8,
