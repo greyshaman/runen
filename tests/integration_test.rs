@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use librunen::rnn::{common::input_config::InputCfg, layouts::network::Network};
+use librunen::rnn::{common::input_cfg::InputCfg, layouts::network::Network};
 use tokio::time::sleep;
 
 #[tokio::test]

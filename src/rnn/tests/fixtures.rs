@@ -1,8 +1,6 @@
 use std::sync::Arc;
 
-use crate::rnn::{
-    common::input_config::InputCfg, layouts::network::Network, neural::neuron::Neuron,
-};
+use crate::rnn::{common::input_cfg::InputCfg, layouts::network::Network, neural::neuron::Neuron};
 
 pub fn new_network_fixture() -> Network {
     Network::new().unwrap()

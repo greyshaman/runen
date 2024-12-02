@@ -9,13 +9,15 @@ use tokio::sync::broadcast::{self, Receiver, Sender};
 use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 
-use crate::rnn::common::input_config::InputCfg;
+use crate::rnn::common::input_cfg::InputCfg;
+use crate::rnn::common::network_cfg::NeuronConfig;
 use crate::rnn::common::rnn_error::RnnError;
 use crate::rnn::common::spec_type::SpecificationType;
 use crate::rnn::common::utils::gen_id_by_spec_type;
-use crate::rnn::neural::neuron::{Neuron, NeuronConfig};
+use crate::rnn::neural::neuron::Neuron;
 
-static mut ID_COUNTER: AtomicUsize = AtomicUsize::new(0_usize);
+// static ID_COUNTER: Arc<RwLock<usize>> = Arc::new(RwLock::new(0));
+static ID_COUNTER: AtomicUsize = AtomicUsize::new(0_usize);
 static CHANNEL_CAPACITY: usize = 5;
 
 /// The network mode
@@ -281,13 +283,7 @@ impl fmt::Display for Network {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-
-    use tokio::time::sleep;
-
-    use crate::rnn::tests::fixtures::{
-        gen_neuron_input_config_fixture, new_network_fixture, new_neuron_fixture,
-    };
+    use crate::rnn::tests::fixtures::{gen_neuron_input_config_fixture, new_network_fixture};
 
     use super::*;
 

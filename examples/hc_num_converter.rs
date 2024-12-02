@@ -5,7 +5,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use librunen::rnn::common::input_config::InputCfg;
+use librunen::rnn::common::input_cfg::InputCfg;
 use librunen::rnn::layouts::network::Network;
 use tokio::task;
 use tokio::time::sleep;

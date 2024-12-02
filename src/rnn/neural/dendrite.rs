@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use tokio::sync::{broadcast::Receiver, RwLock};
 
-use crate::rnn::common::input_config::InputCfg;
+use crate::rnn::common::input_cfg::InputCfg;
 
 /// Neuron's input (the dendrite)
 #[derive(Debug)]

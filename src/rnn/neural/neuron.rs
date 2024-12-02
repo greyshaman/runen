@@ -10,8 +10,6 @@ use std::error::Error;
 use std::sync::Arc;
 use std::sync::Weak;
 
-use serde::Deserialize;
-use serde::Serialize;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::Receiver;
 use tokio::sync::broadcast::Sender;
@@ -21,15 +19,10 @@ use tokio::task::JoinHandle;
 use tokio_util::task::TaskTracker;
 
 use super::dendrite::Dendrite;
-use crate::rnn::common::input_config::InputCfg;
+use crate::rnn::common::input_cfg::InputCfg;
+use crate::rnn::common::network_cfg::NeuronConfig;
 use crate::rnn::common::rnn_error::RnnError;
 use crate::rnn::layouts::network::Network;
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct NeuronConfig {
-    pub id: String,
-    pub input_configs: Vec<InputCfg>,
-}
 
 /// Current neuron state.
 pub struct NeuronState {
