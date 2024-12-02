@@ -9,7 +9,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 ### Added
 
 - Implementation network configuration format and its serialization/deserialization.
-- Added integration test for network
+- Added integration test for network.
+- Added serde_json(v1.0.133) to allow serialization into json format.
 
 ## [0.1.3] - 2024-11-19
 
