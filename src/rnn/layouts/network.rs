@@ -10,7 +10,7 @@ use tokio::sync::RwLock;
 use tokio::task::JoinHandle;
 
 use crate::rnn::common::input_cfg::InputCfg;
-use crate::rnn::common::network_cfg::NeuronConfig;
+use crate::rnn::common::network_cfg::NeuronCfg;
 use crate::rnn::common::rnn_error::RnnError;
 use crate::rnn::common::spec_type::SpecificationType;
 use crate::rnn::common::utils::gen_id_by_spec_type;
@@ -97,7 +97,7 @@ impl Network {
             input_configs
         };
 
-        let neuron_config = NeuronConfig {
+        let neuron_config = NeuronCfg {
             id: new_id.clone(),
             input_configs,
         };

@@ -33,6 +33,8 @@ impl InputCfg {
 
 #[cfg(test)]
 mod tests {
+    use serde_json::json;
+
     use super::*;
 
     #[test]
@@ -44,5 +46,26 @@ mod tests {
     #[test]
     fn should_returns_error_when_regeneration_more_then_capacity() {
         assert!(InputCfg::new(1, 2, 1).is_err());
+    }
+
+    #[test]
+    fn config_should_serialize_into_json_string() {
+        let cfg = InputCfg::new(1, 1, 1).unwrap();
+        let cfg_json = serde_json::to_string(&cfg).unwrap();
+
+        assert_eq!(
+            cfg_json,
+            "{\"capacity_max\":1,\"regeneration\":1,\"weight\":1}"
+        );
+    }
+
+    #[test]
+    fn config_should_deserialize_from_json_string() {
+        let cfg_json = json!({"capacity_max": 1, "regeneration": 1,"weight": 1}).to_string();
+        let cfg: InputCfg = serde_json::from_str(&cfg_json).unwrap();
+
+        assert_eq!(cfg.capacity_max, 1);
+        assert_eq!(cfg.regeneration, 1);
+        assert_eq!(cfg.weight, 1);
     }
 }

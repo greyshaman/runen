@@ -20,7 +20,7 @@ use tokio_util::task::TaskTracker;
 
 use super::dendrite::Dendrite;
 use crate::rnn::common::input_cfg::InputCfg;
-use crate::rnn::common::network_cfg::NeuronConfig;
+use crate::rnn::common::network_cfg::NeuronCfg;
 use crate::rnn::common::rnn_error::RnnError;
 use crate::rnn::layouts::network::Network;
 
@@ -144,8 +144,8 @@ impl Neuron {
 
     /// Creates a new neuron with all the necessary components
     /// in the specified configuration.
-    pub async fn build(network: Arc<Network>, config: NeuronConfig) -> Arc<Neuron> {
-        let NeuronConfig { id, input_configs } = config;
+    pub async fn build(network: Arc<Network>, config: NeuronCfg) -> Arc<Neuron> {
+        let NeuronCfg { id, input_configs } = config;
         let neuron = Neuron::new(&id, network);
         neuron.config(input_configs).await;
 
