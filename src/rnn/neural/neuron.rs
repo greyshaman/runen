@@ -3,12 +3,15 @@
 use std::cmp::max;
 use std::cmp::min;
 use std::collections::hash_map::Entry;
+use std::collections::BTreeMap;
 use std::collections::HashMap;
 use std::collections::HashSet;
 use std::error::Error;
 use std::sync::Arc;
 use std::sync::Weak;
 
+use serde::Deserialize;
+use serde::Serialize;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::Receiver;
 use tokio::sync::broadcast::Sender;
@@ -18,11 +21,11 @@ use tokio::task::JoinHandle;
 use tokio_util::task::TaskTracker;
 
 use super::dendrite::Dendrite;
-use super::dendrite::InputCfg;
+use crate::rnn::common::input_config::InputCfg;
 use crate::rnn::common::rnn_error::RnnError;
 use crate::rnn::layouts::network::Network;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct NeuronConfig {
     pub id: String,
     pub input_configs: Vec<InputCfg>,
@@ -71,7 +74,7 @@ pub struct NeuronCore {
     hit_counter: u64,
 
     /// Neurons input which are received the signals from outside.
-    dendrites: HashMap<usize, Dendrite>,
+    dendrites: BTreeMap<usize, Dendrite>,
 
     /// This structure records which dendrites receive signals from.
     /// If the signals are received on all inputs, or if the signal
@@ -101,7 +104,7 @@ impl Neuron {
             accumulator: 1,
             reset_counter: 0,
             hit_counter: 0,
-            dendrites: HashMap::new(),
+            dendrites: BTreeMap::new(),
             input_hits: HashSet::new(),
             axon: Arc::new(None),
             task_tracker: TaskTracker::new(),
@@ -114,6 +117,7 @@ impl Neuron {
         }
     }
 
+    /// Receive signal by neuron through port
     pub async fn receive(
         core: &Arc<RwLock<NeuronCore>>,
         signal: u8,
@@ -318,7 +322,7 @@ impl Neuron {
         }
     }
 
-    fn get_connected_input_ports_len(dendrites: &HashMap<usize, Dendrite>) -> usize {
+    fn get_connected_input_ports_len(dendrites: &BTreeMap<usize, Dendrite>) -> usize {
         dendrites
             .values()
             .filter(|dendrite| dendrite.connected.is_some())

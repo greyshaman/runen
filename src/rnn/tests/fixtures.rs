@@ -1,8 +1,7 @@
 use std::sync::Arc;
 
 use crate::rnn::{
-    layouts::network::Network,
-    neural::{dendrite::InputCfg, neuron::Neuron},
+    common::input_config::InputCfg, layouts::network::Network, neural::neuron::Neuron,
 };
 
 pub fn new_network_fixture() -> Network {

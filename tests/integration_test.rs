@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use librunen::rnn::{layouts::network::Network, neural::dendrite::InputCfg};
+use librunen::rnn::{common::input_config::InputCfg, layouts::network::Network};
 use tokio::time::sleep;
 
 #[tokio::test]
