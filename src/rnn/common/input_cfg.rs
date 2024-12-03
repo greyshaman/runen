@@ -60,12 +60,30 @@ mod tests {
     }
 
     #[test]
+    fn config_should_serialize_into_yaml_string() {
+        let cfg = InputCfg::new(3, 2, 1).unwrap();
+        let cfg_yaml = serde_yaml::to_string(&cfg).unwrap();
+
+        assert_eq!(cfg_yaml, "capacity_max: 3\nregeneration: 2\nweight: 1\n");
+    }
+
+    #[test]
     fn config_should_deserialize_from_json_string() {
         let cfg_json = json!({"capacity_max": 1, "regeneration": 1,"weight": 1}).to_string();
         let cfg: InputCfg = serde_json::from_str(&cfg_json).unwrap();
 
         assert_eq!(cfg.capacity_max, 1);
         assert_eq!(cfg.regeneration, 1);
+        assert_eq!(cfg.weight, 1);
+    }
+
+    #[test]
+    fn config_shoud_deserialize_from_yaml_string() {
+        let cfg_yaml = "capacity_max: 3\nregeneration: 2\nweight: 1\n";
+        let cfg: InputCfg = serde_yaml::from_str(&cfg_yaml).unwrap();
+
+        assert_eq!(cfg.capacity_max, 3);
+        assert_eq!(cfg.regeneration, 2);
         assert_eq!(cfg.weight, 1);
     }
 }
