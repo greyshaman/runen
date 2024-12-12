@@ -13,6 +13,8 @@ pub async fn new_neuron_fixture(network: Arc<Network>, input_config: Vec<InputCf
         .unwrap()
 }
 
+/// Generate neuron config with size param.
+/// Each dendrite should have configuration with values plus one then before it.
 pub fn gen_neuron_input_config_fixture(size: u8) -> Vec<InputCfg> {
     (1..=size)
         .into_iter()

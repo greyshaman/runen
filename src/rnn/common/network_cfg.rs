@@ -132,7 +132,7 @@ mod tests {
             NeuronCfg {
                 id: String::from("M0Z1"),
                 input_configs: vec![InputCfg::new(1, 1, 1).unwrap()],
-            }
+            },
         ];
         let cfg = NetworkCfg {
             inputs: 2,
@@ -157,7 +157,7 @@ mod tests {
                 LinkCfg::Output {
                     src_id: String::from("M0Z1"),
                     output_port: 0,
-                }
+                },
             ],
         };
 

@@ -35,6 +35,15 @@ pub enum RnnError {
 
     /// Not connected axon
     DeadEndAxon,
+
+    /// Port is not connected to any neurons.
+    AlreadyFree,
+
+    /// When attempt to send neuron status but channel has been closed.
+    MonitoringChannelClosed(String),
+
+    /// When attempt to send neuron status but channel is full.
+    MonitoringChannelFull(String),
 }
 
 impl std::fmt::Display for RnnError {

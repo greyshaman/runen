@@ -10,22 +10,33 @@ use std::error::Error;
 use std::sync::Arc;
 use std::sync::Weak;
 
+use chrono::DateTime;
+use chrono::Utc;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::Receiver;
 use tokio::sync::broadcast::Sender;
+use tokio::sync::mpsc;
 use tokio::sync::RwLock;
 use tokio::sync::RwLockWriteGuard;
 use tokio::task::JoinHandle;
 use tokio_util::task::TaskTracker;
 
 use super::dendrite::Dendrite;
+use crate::rnn::common::command::NeuronCommand;
 use crate::rnn::common::input_cfg::InputCfg;
 use crate::rnn::common::network_cfg::NeuronCfg;
 use crate::rnn::common::rnn_error::RnnError;
+use crate::rnn::common::signal::Signal;
+use crate::rnn::common::signal::Weight;
+use crate::rnn::layouts::network::MonitoringMode;
 use crate::rnn::layouts::network::Network;
 
 /// Current neuron state.
-pub struct NeuronState {
+#[derive(Debug, Clone)]
+pub struct NeuronStatistics {
+    /// The state of the neuron at a time.
+    pub timestamp: DateTime<Utc>,
+
     /// The neuron id.
     pub id: String,
 
@@ -45,20 +56,20 @@ pub struct NeuronState {
     pub hit_count: u64,
 
     /// The accumulator value
-    pub accumulator: i16,
+    pub accumulator: Weight,
 
     /// The number of active receivers.
     pub receiver_count: usize,
 
     /// The sum of dendrites weight
-    pub total_weight: i16,
+    pub total_weight: Weight,
 }
 
 /// The neuron's core, which contains data that is shared between concurrent tasks.
 #[derive(Debug)]
 pub struct NeuronCore {
     /// The accumulator need to sum incoming signals.
-    accumulator: i16,
+    accumulator: Weight,
 
     /// The counter of neuron resets.
     reset_counter: u64,
@@ -77,10 +88,19 @@ pub struct NeuronCore {
 
     /// The accumulated result is transmitted through the axon using
     /// a broadcast channel and sent to other recipients.
-    axon: Arc<Option<Arc<Sender<u8>>>>,
+    axon: Arc<Option<Arc<Sender<Signal>>>>,
 
-    task_tracker: TaskTracker,
-    task_handlers: HashMap<usize, JoinHandle<()>>,
+    /// The task handlers
+    synapse_connection_handlers: HashMap<usize, JoinHandle<()>>,
+
+    /// Each synapse that has a connection is waiting for signals in a separate task.
+    /// Tracker is a collection of these tasks
+    receivers_task_tracker: TaskTracker,
+
+    monitoring_sender: mpsc::WeakSender<NeuronStatistics>,
+
+    monitoring_mode: MonitoringMode,
+    // commands_receiver: broadcast::Receiver<NeuronCommands>,
 }
 
 #[derive(Debug)]
@@ -91,18 +111,27 @@ pub struct Neuron {
 }
 
 impl Neuron {
-    /// Create new empty neuron
-    pub fn new(id: &str, network: Arc<Network>) -> Self {
+    /// Creates a new neuron.
+    /// This method has been moved to a private view, as it only creates
+    /// the essence of a neuron without any connection to the control command channels.
+    async fn new(
+        id: &str,
+        network: Arc<Network>,
+        monitoring_sender: mpsc::WeakSender<NeuronStatistics>,
+    ) -> Self {
         let core = NeuronCore {
-            accumulator: 1,
+            accumulator: 1, // Fixme: add this value into config as bias param
             reset_counter: 0,
             hit_counter: 0,
             dendrites: BTreeMap::new(),
             input_hits: HashSet::new(),
             axon: Arc::new(None),
-            task_tracker: TaskTracker::new(),
-            task_handlers: HashMap::new(),
+            receivers_task_tracker: TaskTracker::new(),
+            synapse_connection_handlers: HashMap::new(),
+            monitoring_sender,
+            monitoring_mode: network.get_monitoring_mode().await,
         };
+
         Neuron {
             id: String::from(id),
             network: Arc::downgrade(&network),
@@ -110,30 +139,79 @@ impl Neuron {
         }
     }
 
+    /// Creates a new neuron with all the necessary components
+    /// in the specified configuration.
+    pub async fn build(network: Arc<Network>, config: NeuronCfg) -> Arc<Neuron> {
+        let NeuronCfg { id, input_configs } = config;
+
+        let mut commands_receiver = network.get_commands_receiver();
+        let monitoring_sender = network.get_monitoring_sender();
+
+        let neuron = Neuron::new(&id, network, monitoring_sender).await;
+        neuron.config(input_configs).await;
+
+        let neuron = Arc::new(neuron);
+
+        let neuron_cloned = neuron.clone();
+
+        let _ = neuron
+            .core
+            .read()
+            .await
+            .receivers_task_tracker
+            .spawn(async move {
+                while let Ok(command) = commands_receiver.recv().await {
+                    match command {
+                        NeuronCommand::SwitchMonitoringMode(mode) => {
+                            neuron_cloned.switch_monitoring_mode(mode).await;
+                        }
+                    }
+                }
+            });
+
+        neuron
+    }
+
     /// Receive signal by neuron through port
     pub async fn receive(
+        id: &str,
         core: &Arc<RwLock<NeuronCore>>,
-        signal: u8,
+        signal: Signal,
         port: usize,
     ) -> Result<(), Box<dyn Error>> {
-        let mut w_core = core.write().await;
-        {
-            w_core.hit_counter += 1;
-        }
+        let t_handler = {
+            let mut w_core = core.write().await;
+            {
+                w_core.hit_counter += 1;
+            }
 
-        if let Some(input) = w_core.dendrites.get_mut(&port) {
-            let signal = Self::synapse_accept_signal(input, signal);
+            let monitoring_mode = w_core.monitoring_mode.clone();
+            if let Some(input) = w_core.dendrites.get_mut(&port) {
+                let signal = Self::synapse_accept_signal(input, signal);
 
-            let signal: i16 = Self::dendrite_weighting_signal(input, signal);
+                let signal: Weight = Self::dendrite_weighting_signal(input, signal);
 
-            Self::process_signal(w_core, signal, port)
-        } else {
-            Err(Box::new(RnnError::IdNotFound))
-        }
+                Self::process_signal(w_core, signal, port)?;
+
+                if monitoring_mode == MonitoringMode::Monitoring {
+                    let id = String::from(id);
+                    let core_cloned = core.clone();
+                    tokio::task::spawn(async move {
+                        Self::send_monitoring_statistics(&id, &core_cloned).await
+                    })
+                } else {
+                    tokio::task::spawn(async { Ok(()) })
+                }
+            } else {
+                tokio::task::spawn(async { Err(RnnError::IdNotFound) })
+            }
+        };
+
+        t_handler.await?.map_err(|e| Box::new(e) as Box<dyn Error>)
     }
 
     /// Send only positive signal otherwise suppress transmission. Need to stop endless looping zero signals
-    pub fn send(axon: Arc<Sender<u8>>, signal: u8) -> Result<usize, Box<dyn Error>> {
+    pub fn send(axon: Arc<Sender<Signal>>, signal: Signal) -> Result<usize, Box<dyn Error>> {
         if signal > 0 {
             axon.send(signal)
                 .map_err(|_| Box::new(RnnError::SignalSendError) as Box<dyn Error>)
@@ -142,32 +220,20 @@ impl Neuron {
         }
     }
 
-    /// Creates a new neuron with all the necessary components
-    /// in the specified configuration.
-    pub async fn build(network: Arc<Network>, config: NeuronCfg) -> Arc<Neuron> {
-        let NeuronCfg { id, input_configs } = config;
-        let neuron = Neuron::new(&id, network);
-        neuron.config(input_configs).await;
-
-        Arc::new(neuron)
-    }
-
-    // TODO add snapshot
-
     /// Config new neuron
     pub async fn config(&self, settings: Vec<InputCfg>) {
         let mut w_core = self.core.write().await;
         w_core.dendrites.clear();
         w_core.input_hits.clear();
         w_core.accumulator = 1;
-        for (port, i_cfg) in settings.iter().enumerate() {
+        for (port, input_cfg) in settings.iter().enumerate() {
             let dendrite = Dendrite {
                 config: InputCfg {
-                    capacity_max: i_cfg.capacity_max,
-                    regeneration: i_cfg.regeneration,
-                    weight: i_cfg.weight,
+                    capacity_max: input_cfg.capacity_max,
+                    regeneration: input_cfg.regeneration,
+                    weight: input_cfg.weight,
                 },
-                syn_capacity: i_cfg.capacity_max,
+                synapse_capacity: input_cfg.capacity_max,
                 connected: None,
                 synapse: None,
             };
@@ -175,13 +241,37 @@ impl Neuron {
         }
     }
 
+    /// Get current neuron config
+    pub async fn get_config(&self) -> NeuronCfg {
+        let r_core = self.core.read().await;
+        let input_configs = r_core
+            .dendrites
+            .iter()
+            .map(|(_idx, dendrite)| dendrite.config.clone())
+            .collect::<Vec<InputCfg>>();
+
+        NeuronCfg {
+            id: self.get_id(),
+            input_configs,
+        }
+    }
+
+    pub async fn switch_monitoring_mode(&self, mode: MonitoringMode) {
+        let mut w_core = self.core.write().await;
+        w_core.monitoring_mode = mode;
+    }
+
+    pub async fn get_monitoring_mode(&self) -> MonitoringMode {
+        self.core.read().await.monitoring_mode.clone()
+    }
+
     /// Provides access to a channel (axon) for receiving signals from a given neuron.
-    pub async fn provide_output(&self) -> Arc<RwLock<Receiver<u8>>> {
+    pub async fn provide_output(&self) -> Arc<RwLock<Receiver<Signal>>> {
         let rx = {
             let mut w_core = self.core.write().await;
             w_core.axon.clone().as_deref().map_or_else(
                 || {
-                    let (tx, rx) = broadcast::channel::<u8>(5);
+                    let (tx, rx) = broadcast::channel::<Signal>(5);
                     w_core.axon = Arc::new(Some(Arc::new(tx)));
                     rx
                 },
@@ -233,16 +323,19 @@ impl Neuron {
                     dendrite.connected = Some(src_id.to_string());
 
                     // Set synapse current capacity
-                    dendrite.syn_capacity = dendrite.config.capacity_max;
+                    dendrite.synapse_capacity = dendrite.config.capacity_max;
 
                     // Set receiver half of connecting channel
                     dendrite.synapse = Some(receiver.clone());
 
                     let synapse = receiver.clone();
                     let core_cloned = self.core.clone();
+                    let id_cloned = self.get_id();
 
                     // Check if already has task_handler at specified port number
-                    if let Entry::Occupied(task_entry) = w_core.task_handlers.entry(port) {
+                    if let Entry::Occupied(task_entry) =
+                        w_core.synapse_connection_handlers.entry(port)
+                    {
                         let task_handler = task_entry.get();
                         // abort listener task
                         task_handler.abort();
@@ -250,14 +343,17 @@ impl Neuron {
                         // clear entry
                         task_entry.remove();
                     }
-                    let task_handler = w_core.task_tracker.spawn(async move {
+                    let task_handler = w_core.receivers_task_tracker.spawn(async move {
                         let mut w_synapse = synapse.write().await;
                         while let Ok(signal) = w_synapse.recv().await {
-                            let write_me_into_log = Self::receive(&core_cloned, signal, port).await;
+                            let write_me_into_log =
+                                Self::receive(&id_cloned, &core_cloned, signal, port).await;
                         }
                     });
 
-                    w_core.task_handlers.insert(port, task_handler);
+                    w_core
+                        .synapse_connection_handlers
+                        .insert(port, task_handler);
 
                     Ok(())
                 } else {
@@ -274,21 +370,47 @@ impl Neuron {
         }
     }
 
+    /// Get network which contains this neuron
     pub fn get_network(&self) -> Option<Arc<Network>> {
         self.network.upgrade()
     }
 
+    /// Get neuron's id
     pub fn get_id(&self) -> String {
         self.id.clone()
     }
 
+    /// Get number of dendrites
     pub async fn get_input_ports_len(&self) -> usize {
         self.core.read().await.dendrites.len()
     }
 
-    /// Request neuron state.
-    pub async fn get_state(&self) -> NeuronState {
-        let r_core = self.core.read().await;
+    pub fn get_core(&self) -> Arc<RwLock<NeuronCore>> {
+        self.core.clone()
+    }
+
+    /// send neuron state to monitoring network receiver.
+    pub async fn send_monitoring_statistics(
+        id: &str,
+        core: &Arc<RwLock<NeuronCore>>,
+    ) -> Result<(), RnnError> {
+        let statistics = Self::prepare_statistics(id, core).await;
+
+        let r_core = core.read().await;
+        if let Some(sender) = r_core.monitoring_sender.upgrade() {
+            sender.send(statistics).await.map_err(|e| {
+                RnnError::MonitoringChannelClosed(format!(
+                    "Statistics sending error due channel closed. Lost stat: {:?}",
+                    e
+                ))
+            })
+        } else {
+            Ok(())
+        }
+    }
+
+    pub async fn prepare_statistics(id: &str, core: &Arc<RwLock<NeuronCore>>) -> NeuronStatistics {
+        let r_core = core.read().await;
         let dendrite_count = r_core.dendrites.len();
         let dendrite_connected_count = Self::get_connected_input_ports_len(&r_core.dendrites);
         let dendrite_hit_count = r_core.input_hits.len();
@@ -301,9 +423,11 @@ impl Neuron {
         let reset_count = r_core.reset_counter;
         let hit_count = r_core.hit_counter;
         let total_weight = r_core.dendrites.values().map(|d| d.config.weight).sum();
+        let now = Utc::now();
 
-        NeuronState {
-            id: self.id.clone(),
+        NeuronStatistics {
+            timestamp: now,
+            id: id.to_string(),
             dendrite_count,
             dendrite_connected_count,
             dendrite_hit_count,
@@ -323,35 +447,35 @@ impl Neuron {
     }
 
     #[inline]
-    fn synapse_accept_signal(input: &mut Dendrite, signal: u8) -> u8 {
+    fn synapse_accept_signal(input: &mut Dendrite, signal: Signal) -> Signal {
         // Synapse responsibility
-        let signal: u8 = min(signal, input.syn_capacity);
-        input.syn_capacity -= signal;
-        input.syn_capacity = min(
-            input.syn_capacity + input.config.regeneration,
+        let signal: Signal = min(signal, input.synapse_capacity);
+        input.synapse_capacity -= signal;
+        input.synapse_capacity = min(
+            input.synapse_capacity + input.config.regeneration,
             input.config.capacity_max,
         );
         signal
     }
 
     #[inline]
-    fn dendrite_weighting_signal(input: &Dendrite, signal: u8) -> i16 {
-        (signal as i16) * input.config.weight
+    fn dendrite_weighting_signal(input: &Dendrite, signal: Signal) -> Weight {
+        (signal as Weight) * input.config.weight
     }
 
     #[inline]
     fn process_signal(
         mut w_core: RwLockWriteGuard<NeuronCore>,
-        signal: i16,
+        weighted_signal: Weight,
         port: usize,
     ) -> Result<(), Box<dyn Error>> {
         if w_core.input_hits.contains(&port) {
             // The Repeat signal case
             // A signal is being prepared for output through the axon
-            let output_signal = max(w_core.accumulator, 0) as u8;
+            let output_signal = max(w_core.accumulator, 0) as Signal;
 
             // Reset accumulator with new signal plus excitation level
-            w_core.accumulator = signal + 1;
+            w_core.accumulator = weighted_signal + 1;
 
             // Increment neuron resets counter
             w_core.reset_counter += 1;
@@ -372,7 +496,7 @@ impl Neuron {
             }
         } else {
             // Add signal value to accumulator
-            w_core.accumulator += signal as i16;
+            w_core.accumulator += weighted_signal as i16;
 
             // Store fact of signal hit to current port
             w_core.input_hits.insert(port);
@@ -412,33 +536,77 @@ mod tests {
     use super::*;
 
     mod for_default_neuron {
+        use std::time::Duration;
+
         use crate::rnn::{
             common::spec_type::SpecificationType,
+            layouts::network::MonitoringMode,
             tests::fixtures::{new_network_fixture, new_neuron_fixture},
         };
 
         use super::*;
 
         #[tokio::test]
-        async fn status_fn_should_return_correct_neuron_state() {
+        async fn fn_status_should_return_correct_neuron_state() {
             let net = Arc::new(new_network_fixture());
             let neuron = new_neuron_fixture(net.clone(), vec![]).await;
 
-            let state = neuron.get_state().await;
+            let stat = net
+                .get_current_neuron_statistics(&neuron.get_id())
+                .await
+                .unwrap();
 
-            assert_eq!(state.id, neuron.get_id());
-            assert_eq!(state.dendrite_count, 1);
-            assert_eq!(state.dendrite_connected_count, 0);
-            assert_eq!(state.dendrite_hit_count, 0);
-            assert_eq!(state.accumulator, 1);
-            assert_eq!(state.receiver_count, 0);
-            assert_eq!(state.reset_count, 0);
-            assert_eq!(state.hit_count, 0);
-            assert_eq!(state.total_weight, 1);
+            assert!(stat.timestamp.timestamp().is_positive());
+            assert_eq!(stat.id, neuron.get_id());
+            assert_eq!(stat.dendrite_count, 1);
+            assert_eq!(stat.dendrite_connected_count, 0);
+            assert_eq!(stat.dendrite_hit_count, 0);
+            assert_eq!(stat.accumulator, 1);
+            assert_eq!(stat.receiver_count, 0);
+            assert_eq!(stat.reset_count, 0);
+            assert_eq!(stat.hit_count, 0);
+            assert_eq!(stat.total_weight, 1);
         }
 
         #[tokio::test]
-        async fn get_input_ports_len_fn_should_return_one() {
+        async fn fn_switch_monitoring_mode_should_change_monitoring_mode() {
+            let net = Arc::new(new_network_fixture());
+            let neuron = new_neuron_fixture(net.clone(), vec![]).await;
+
+            assert_eq!(neuron.get_monitoring_mode().await, MonitoringMode::None);
+
+            neuron
+                .switch_monitoring_mode(MonitoringMode::Monitoring)
+                .await;
+            assert_eq!(
+                neuron.get_monitoring_mode().await,
+                MonitoringMode::Monitoring
+            );
+
+            neuron.switch_monitoring_mode(MonitoringMode::None).await;
+            assert_eq!(neuron.get_monitoring_mode().await, MonitoringMode::None);
+        }
+
+        #[tokio::test]
+        async fn sending_switch_monitoring_mode_by_command_should_change_neuron_mode_to_same_mode()
+        {
+            let net = Arc::new(new_network_fixture());
+            let neuron = new_neuron_fixture(net.clone(), vec![]).await;
+
+            assert_eq!(neuron.get_monitoring_mode().await, MonitoringMode::None);
+
+            net.set_monitoring_mode(MonitoringMode::Monitoring).await;
+
+            tokio::time::sleep(Duration::from_millis(1)).await; // Time required to apply changes in all neurons
+
+            assert_eq!(
+                neuron.get_monitoring_mode().await,
+                MonitoringMode::Monitoring
+            );
+        }
+
+        #[tokio::test]
+        async fn fn_get_input_ports_len_should_return_one() {
             let net = Arc::new(new_network_fixture());
             let neuron = new_neuron_fixture(net.clone(), vec![]).await;
 
@@ -446,7 +614,7 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn get_connected_input_ports_len_fn_should_return_zero() {
+        async fn fn_get_connected_input_ports_len_should_return_zero() {
             let net = Arc::new(new_network_fixture());
             let neuron = new_neuron_fixture(net.clone(), vec![]).await;
 
@@ -456,7 +624,7 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn get_id_fn_should_return_correct_id() {
+        async fn fn_get_id_should_return_correct_id() {
             let net = Arc::new(new_network_fixture());
             let neuron = new_neuron_fixture(net.clone(), vec![]).await;
 
@@ -465,7 +633,7 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn get_network_fn_should_return_network_with_correct_id() {
+        async fn fn_get_network_should_return_network_with_correct_id() {
             let net = Arc::new(new_network_fixture());
             let neuron = new_neuron_fixture(net.clone(), vec![]).await;
 
@@ -497,9 +665,10 @@ mod tests {
         }
 
         #[tokio::test(flavor = "multi_thread")]
-        async fn provide_output_fn_should_return_receiver() {
+        async fn fn_provide_output_should_return_receiver() {
             let net = Arc::new(new_network_fixture());
             let neuron = new_neuron_fixture(net.clone(), vec![]).await;
+            let neuron_id = neuron.get_id();
 
             let receiver_orig = neuron.provide_output().await;
 
@@ -519,14 +688,15 @@ mod tests {
                 assert!(res.is_ok());
             }
 
-            let state = neuron.get_state().await;
-            assert_eq!(state.receiver_count, 1);
+            let stat = net.get_current_neuron_statistics(&neuron_id).await.unwrap();
+            assert_eq!(stat.receiver_count, 1);
         }
 
         #[tokio::test]
-        async fn connect_fn_should_perform_connection_to_input_port() {
+        async fn fn_connect_should_perform_connection_to_input_port() {
             let net = Arc::new(new_network_fixture());
             let neuron = new_neuron_fixture(net.clone(), vec![]).await;
+            let neuron_id = neuron.get_id();
 
             let monitor = neuron.provide_output().await;
             let mut w_monitor = monitor.write().await;
@@ -541,15 +711,15 @@ mod tests {
             }
             assert!(res.is_ok());
 
-            let state = neuron.get_state().await;
-            assert_eq!(state.dendrite_connected_count, 1);
-            assert_eq!(state.receiver_count, 1);
-            assert_eq!(state.hit_count, 1);
-            assert_eq!(state.reset_count, 1);
+            let stat = net.get_current_neuron_statistics(&neuron_id).await.unwrap();
+            assert_eq!(stat.dendrite_connected_count, 1);
+            assert_eq!(stat.receiver_count, 1);
+            assert_eq!(stat.hit_count, 1);
+            assert_eq!(stat.reset_count, 1);
         }
 
         #[tokio::test]
-        async fn link_to_fn_should_perform_link_to_another_neuron() {
+        async fn fn_link_to_should_perform_link_to_another_neuron() {
             let net = Arc::new(new_network_fixture());
             let neuron1 = new_neuron_fixture(net.clone(), vec![]).await;
             let neuron2 = new_neuron_fixture(net.clone(), vec![]).await;
@@ -571,13 +741,16 @@ mod tests {
             }
             assert!(res.is_ok());
 
-            let state = neuron1.get_state().await;
-            assert_eq!(state.reset_count, 1);
-            assert_eq!(state.hit_count, 1);
+            let stat = net
+                .get_current_neuron_statistics(&neuron1.get_id())
+                .await
+                .unwrap();
+            assert_eq!(stat.reset_count, 1);
+            assert_eq!(stat.hit_count, 1);
         }
 
         #[tokio::test]
-        async fn get_network_fn_should_return_contained_network() {
+        async fn fn_get_network_should_return_contained_network() {
             let net = Arc::new(new_network_fixture());
             let neuron = new_neuron_fixture(net.clone(), vec![]).await;
 
@@ -596,19 +769,22 @@ mod tests {
         use super::*;
 
         #[tokio::test]
-        async fn get_input_ports_len_fn_should_return_configured_number_of_dendrites() {
+        async fn fn_get_input_ports_len_should_return_configured_number_of_dendrites() {
             let net = Arc::new(new_network_fixture());
             let neuron = new_neuron_fixture(net.clone(), gen_neuron_input_config_fixture(3)).await;
 
-            let state = neuron.get_state().await;
+            let stat = net
+                .get_current_neuron_statistics(&neuron.get_id())
+                .await
+                .unwrap();
 
             assert_eq!(neuron.get_input_ports_len().await, 3);
-            assert_eq!(state.dendrite_connected_count, 0);
-            assert_eq!(state.total_weight, 6);
+            assert_eq!(stat.dendrite_connected_count, 0);
+            assert_eq!(stat.total_weight, 6);
         }
 
         #[tokio::test]
-        async fn config_fn_should_add_new_dendrites() {
+        async fn fn_config_should_add_new_dendrites() {
             let net = Arc::new(new_network_fixture());
             let inputs_config1 = gen_neuron_input_config_fixture(3);
             let inputs_config2 = gen_neuron_input_config_fixture(2);
@@ -617,6 +793,24 @@ mod tests {
 
             neuron.config(inputs_config2).await;
             assert_eq!(neuron.get_input_ports_len().await, 2);
+        }
+
+        #[tokio::test]
+        async fn fn_get_config_should_return_correct_config() {
+            let net = Arc::new(new_network_fixture());
+            let input_config = gen_neuron_input_config_fixture(3);
+            let neuron = new_neuron_fixture(net.clone(), input_config).await;
+            let expected_id = &neuron.get_id();
+            let cfg = neuron.get_config().await;
+
+            assert_eq!(&cfg.id, expected_id);
+            assert_eq!(&cfg.input_configs.len(), &3);
+            assert!(&cfg.input_configs.iter().enumerate().all(|(idx, cfg)| {
+                let current_value = (idx + 1) as u8;
+                cfg.capacity_max == current_value
+                    && cfg.regeneration == current_value
+                    && cfg.weight == current_value as i16
+            }));
         }
     }
 }

@@ -1,33 +1,55 @@
 use core::fmt;
-use std::collections::{BTreeMap, HashMap};
+use std::collections::btree_map::Entry;
+use std::collections::BTreeMap;
 use std::error::Error;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
 use regex::Regex;
 use tokio::sync::broadcast::{self, Receiver, Sender};
-use tokio::sync::RwLock;
-use tokio::task::JoinHandle;
+use tokio::sync::{mpsc, RwLock};
+use tokio::time;
+use tokio_util::sync::CancellationToken;
+use tokio_util::task::TaskTracker;
 
+use crate::rnn::common::command::NeuronCommand;
 use crate::rnn::common::input_cfg::InputCfg;
 use crate::rnn::common::network_cfg::NeuronCfg;
 use crate::rnn::common::rnn_error::RnnError;
 use crate::rnn::common::spec_type::SpecificationType;
 use crate::rnn::common::utils::gen_id_by_spec_type;
-use crate::rnn::neural::neuron::Neuron;
+use crate::rnn::neural::neuron::{self, Neuron, NeuronStatistics};
 
-// static ID_COUNTER: Arc<RwLock<usize>> = Arc::new(RwLock::new(0));
 static ID_COUNTER: AtomicUsize = AtomicUsize::new(0_usize);
 static CHANNEL_CAPACITY: usize = 5;
+static GRACEFUL_SHUTDOWN_PERIOD: u64 = 20;
 
-/// The network mode
-#[derive(Debug, Clone)]
-pub enum NetworkMode {
+/// The network tracing mode
+#[derive(Debug, Clone, PartialEq)]
+pub enum MonitoringMode {
     /// Default mode
-    Standard,
+    None,
 
-    /// Tracing mode with logging into log file
-    Trace(String),
+    /// Enable monitoring mode and store monitoring data from neurons
+    /// into self.monitoring_ch.store vector
+    Monitoring,
+}
+
+#[derive(Debug)]
+struct Modes {
+    trace_mode: MonitoringMode,
+}
+
+#[derive(Debug)]
+struct CommandsCh {
+    sender: Arc<broadcast::Sender<NeuronCommand>>,
+}
+
+#[derive(Debug)]
+struct MonitoringCh {
+    sender: Arc<mpsc::Sender<neuron::NeuronStatistics>>,
+    store: Arc<RwLock<Vec<NeuronStatistics>>>,
 }
 
 /// Network is a high level container to other containers (neurons)
@@ -35,16 +57,21 @@ pub enum NetworkMode {
 pub struct Network {
     id: String,
     neurons: RwLock<BTreeMap<String, Arc<Neuron>>>,
-    mode: Arc<RwLock<NetworkMode>>,
+    modes: Arc<RwLock<Modes>>,
     input_interface: Arc<RwLock<BTreeMap<usize, Arc<RwLock<Sender<u8>>>>>>,
     output_interface: Arc<RwLock<BTreeMap<usize, Arc<RwLock<Receiver<u8>>>>>>,
-    processing_registers: Arc<RwLock<HashMap<usize, JoinHandle<()>>>>, // TODO use TaskTracker instead
-    trace_log: Arc<RwLock<Vec<String>>>,
+    commands_ch: CommandsCh,
+    monitoring_ch: MonitoringCh,
+    receivers_tracker: TaskTracker,
+    cancel_token: CancellationToken,
 }
 
 impl Network {
     pub fn new() -> Result<Network, Box<dyn Error>> {
-        gen_id_by_spec_type(
+        let (monitoring_sender, monitoring_receiver) = mpsc::channel(CHANNEL_CAPACITY);
+        let (commands_sender, _commands_receiver) = broadcast::channel(CHANNEL_CAPACITY);
+
+        let net = gen_id_by_spec_type(
             "",
             unsafe { ID_COUNTER.fetch_add(1, Ordering::Relaxed) },
             &SpecificationType::Network,
@@ -52,26 +79,74 @@ impl Network {
         .map(|id| Network {
             id,
             neurons: RwLock::new(BTreeMap::new()),
-            mode: Arc::new(RwLock::new(NetworkMode::Standard)),
+            modes: Arc::new(RwLock::new(Modes {
+                trace_mode: MonitoringMode::None,
+            })),
             input_interface: Arc::new(RwLock::new(BTreeMap::new())),
             output_interface: Arc::new(RwLock::new(BTreeMap::new())),
-            processing_registers: Arc::new(RwLock::new(HashMap::new())),
-            trace_log: Arc::new(RwLock::new(Vec::new())),
-        })
+            commands_ch: CommandsCh {
+                // receiver: Arc::new(commands_receiver), // TODO: Try not keeping this because receivers created as subscriptions
+                sender: Arc::new(commands_sender),
+            },
+            monitoring_ch: MonitoringCh {
+                sender: Arc::new(monitoring_sender),
+                store: Arc::new(RwLock::new(vec![])),
+            },
+            receivers_tracker: TaskTracker::new(),
+            cancel_token: CancellationToken::new(),
+        })?;
+
+        let monitoring_store_cloned = net.monitoring_ch.store.clone();
+        let cancel_token_cloned = net.cancel_token.clone();
+
+        let _ = &net.receivers_tracker.spawn(async move {
+            tokio::select! {
+                () = Self::monitoring_receiver_task(monitoring_store_cloned, monitoring_receiver) => {}
+                () = cancel_token_cloned.cancelled() => {
+                    println!("Waiting to shutdown....");
+                    time::sleep(Duration::from_millis(GRACEFUL_SHUTDOWN_PERIOD)).await;
+                    println!("Cleanup complete.");
+                }
+            }
+        });
+
+        Ok(net)
     }
 
-    pub async fn set_mode(&self, mode: NetworkMode) {
-        let mut w_mode = self.mode.write().await;
-        *w_mode = mode;
+    async fn monitoring_receiver_task(
+        monitoring_store: Arc<RwLock<Vec<NeuronStatistics>>>,
+        mut monitoring_receiver: mpsc::Receiver<NeuronStatistics>,
+    ) {
+        while let Some(neuron_state) = monitoring_receiver.recv().await {
+            let mut w_monitoring_store = monitoring_store.write().await;
+            w_monitoring_store.push(neuron_state); // TODO review possibility write into stream
+        }
     }
 
-    pub async fn get_mode(&self) -> NetworkMode {
-        self.mode.read().await.clone()
+    pub async fn set_monitoring_mode(&self, mode: MonitoringMode) {
+        let mut w_state = self.modes.write().await;
+        w_state.trace_mode = mode.clone();
+        let _send_command_result = self
+            .commands_ch
+            .sender
+            .send(NeuronCommand::SwitchMonitoringMode(mode));
+    }
+
+    pub async fn get_monitoring_mode(&self) -> MonitoringMode {
+        self.modes.read().await.trace_mode.clone()
     }
 
     pub async fn get_neuron(&self, id: &str) -> Option<Arc<Neuron>> {
         let r_neurons = self.neurons.read().await;
         r_neurons.get(id).map(|neuron| Arc::clone(neuron))
+    }
+
+    pub fn get_commands_receiver(&self) -> broadcast::Receiver<NeuronCommand> {
+        self.commands_ch.sender.subscribe()
+    }
+
+    pub fn get_monitoring_sender(&self) -> mpsc::WeakSender<NeuronStatistics> {
+        self.monitoring_ch.sender.downgrade()
     }
 
     pub async fn create_neuron(
@@ -209,11 +284,33 @@ impl Network {
         }
     }
 
-    pub async fn pop_result_log(&self) -> Vec<String> {
-        let mut w_trace_log = self.trace_log.write().await;
-        let snapshot = w_trace_log.clone();
-        w_trace_log.clear();
+    pub async fn pop_monitoring_store(&self) -> Vec<NeuronStatistics> {
+        let mut w_monitoring_store = self.monitoring_ch.store.write().await;
+        let snapshot = w_monitoring_store.clone();
+        w_monitoring_store.clear();
         snapshot
+    }
+
+    pub async fn get_current_neuron_statistics(
+        &self,
+        neuron_id: &str,
+    ) -> Result<NeuronStatistics, Box<dyn Error>> {
+        if let Some(target) = self.get_neuron(neuron_id).await {
+            Ok(Neuron::prepare_statistics(&target.get_id(), &target.get_core()).await)
+        } else {
+            Err(Box::new(RnnError::IdNotFound))
+        }
+    }
+
+    pub async fn free_output(&self, network_port: usize) -> Result<(), Box<dyn Error>> {
+        let mut w_output_interface = self.output_interface.write().await;
+        match w_output_interface.entry(network_port) {
+            Entry::Occupied(entity) => {
+                entity.remove();
+                Ok(())
+            }
+            Entry::Vacant(_) => Err(Box::new(RnnError::AlreadyFree)),
+        }
     }
 
     pub async fn setup_output(
@@ -223,7 +320,17 @@ impl Network {
     ) -> Result<(), Box<dyn Error>> {
         let mut w_output_interface = self.output_interface.write().await;
         if let Some(neuron) = self.get_neuron(neuron_id).await {
-            w_output_interface.insert(network_port.clone(), neuron.provide_output().await);
+            // connect axon to output port if port is free else return error
+            match w_output_interface.entry(network_port.clone()) {
+                Entry::Occupied(_) => Err(Box::new(RnnError::IdBusy(format!(
+                    "Port {} already used",
+                    network_port
+                )))),
+                Entry::Vacant(entity) => {
+                    entity.insert(neuron.provide_output().await);
+                    Ok(())
+                }
+            }
             // if  self.get
             // let c_receiver = neuron.provide_output().await;
             // let c_results = self.trace_log.clone();
@@ -247,18 +354,8 @@ impl Network {
             //     .write()
             //     .await
             //     .insert(network_port.clone(), jh);
-
-            Ok(())
         } else {
             Err(Box::new(RnnError::IdNotFound))
-        }
-    }
-
-    async fn activate_trace_log(&self) {
-        if let NetworkMode::Trace(log_filename) = self.mode.read().await.clone() {
-            // получить список портов имеющих соединение
-            // создать для портов потоки ведущие записи в лог
-            // предусмотреть возможность прерывания потоков в случае смены режима или остановки работы сети
         }
     }
 
@@ -287,8 +384,8 @@ mod tests {
 
     use super::*;
 
-    #[test]
-    fn should_create_two_unique_networks() {
+    #[tokio::test]
+    async fn should_create_two_unique_networks() {
         let n1 = Network::new().unwrap();
         let n2 = Network::new().unwrap();
 
@@ -364,10 +461,19 @@ mod tests {
         assert!(!net.has_neuron("missed").await);
     }
 
-    #[test]
-    fn network_returns_correct_id_by_get_id() {
+    #[tokio::test]
+    async fn network_returns_correct_id_by_get_id() {
         let net = Network::new().unwrap();
         assert_eq!(net.id, net.get_id());
+    }
+
+    #[tokio::test]
+    async fn fn_get_current_neuron_statistics_should_return_some_value() {
+        let net = Arc::new(new_network_fixture());
+        let neuron = net.create_neuron(net.clone(), vec![]).await.unwrap();
+        let id = neuron.get_id();
+
+        assert!(net.get_current_neuron_statistics(&id).await.is_ok());
     }
 
     #[tokio::test]
@@ -381,14 +487,18 @@ mod tests {
         let res = net.connect_neurons(&src_id, &dst_id, 0).await;
         assert!(res.is_ok());
 
-        let src_state = neuron1.get_state().await;
+        let src_stat = net.get_current_neuron_statistics(&src_id).await;
 
-        assert_eq!(src_state.dendrite_count, 1);
-        assert_eq!(src_state.dendrite_connected_count, 0);
+        assert!(src_stat.is_ok());
+        let src_stat = src_stat.unwrap();
+        assert_eq!(src_stat.dendrite_count, 1);
+        assert_eq!(src_stat.dendrite_connected_count, 0);
 
-        let dst_state = neuron2.get_state().await;
-        assert_eq!(dst_state.dendrite_count, 1);
-        assert_eq!(dst_state.dendrite_connected_count, 1);
+        let dst_stat = net.get_current_neuron_statistics(&dst_id).await;
+        assert!(dst_stat.is_ok());
+        let dst_stat = dst_stat.unwrap();
+        assert_eq!(dst_stat.dendrite_count, 1);
+        assert_eq!(dst_stat.dendrite_connected_count, 1);
     }
 
     #[tokio::test]
@@ -444,5 +554,31 @@ mod tests {
 
         let res = net.connect_neurons(&id, &id, 0).await;
         assert!(res.is_ok());
+    }
+
+    #[tokio::test]
+    async fn should_set_correct_monitoring_mode_for_new_added_neuron() {
+        let net = Arc::new(new_network_fixture());
+        let _n1 = net.create_neuron(net.clone(), vec![]).await.unwrap();
+        net.set_monitoring_mode(MonitoringMode::Monitoring).await;
+
+        let n2 = net.create_neuron(net.clone(), vec![]).await.unwrap();
+        assert_eq!(n2.get_monitoring_mode().await, MonitoringMode::Monitoring);
+    }
+
+    #[tokio::test]
+    async fn should_store_monitoring_records_on_signal_operation() {
+        let net = Arc::new(new_network_fixture());
+        net.set_monitoring_mode(MonitoringMode::Monitoring).await;
+        let n = net.create_neuron(net.clone(), vec![]).await.unwrap();
+        assert!(net.setup_input(0, &n.get_id(), 0).await.is_ok());
+        assert!(net.setup_output(0, &n.get_id()).await.is_ok());
+
+        assert_eq!(net.pop_monitoring_store().await.len(), 0);
+        assert!(net.input(1, 0).await.is_ok());
+
+        tokio::time::sleep(Duration::from_millis(1)).await;
+
+        assert_eq!(net.pop_monitoring_store().await.len(), 1);
     }
 }

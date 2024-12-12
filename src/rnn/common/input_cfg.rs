@@ -2,23 +2,30 @@ use std::error::Error;
 
 use serde::{Deserialize, Serialize};
 
-use super::rnn_error::RnnError;
+use super::{
+    rnn_error::RnnError,
+    signal::{Signal, Weight},
+};
 
 /// Input configuration
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct InputCfg {
     /// High limit of synapse (input) capacity
-    pub capacity_max: u8,
+    pub capacity_max: Signal,
 
     /// The amount of capacity recovery after its reduction
-    pub regeneration: u8,
+    pub regeneration: Signal,
 
     /// Th dendrite's weight
-    pub weight: i16,
+    pub weight: Weight,
 }
 
 impl InputCfg {
-    pub fn new(capacity_max: u8, regeneration: u8, weight: i16) -> Result<Self, Box<dyn Error>> {
+    pub fn new(
+        capacity_max: Signal,
+        regeneration: Signal,
+        weight: Weight,
+    ) -> Result<Self, Box<dyn Error>> {
         if regeneration > capacity_max {
             Err(Box::new(RnnError::NotSupportedArgValue))
         } else {

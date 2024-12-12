@@ -47,7 +47,10 @@ async fn test_signal_propagation() {
     assert!(net.input(1, 0).await.is_ok());
     sleep(Duration::from_millis(1)).await;
 
-    let state0 = neuron0.get_state().await;
+    let state0 = net
+        .get_current_neuron_statistics(&neuron0.get_id())
+        .await
+        .unwrap();
     assert_eq!(state0.hit_count, 2);
 
     // let results = net.pop_result_log().await;

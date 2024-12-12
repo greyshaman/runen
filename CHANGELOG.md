@@ -12,6 +12,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Added integration test for network.
 - Added serde_json(v1.0.133) to allow serialization into json format.
 - Added serde_yaml(v0.9.34) to allow serialization into yaml format.
+- Added chrono(v0.4.38) to allow to fix time moment for monitoring records.
+- Added command broadcast channel to send command from network to neurons. Implemented switch_monitoring_mode command.
+- Implementation of monitoring neuron activity (when signal receiving).
+
+### Changed
+
+- Change Network structure: added commands channel and improve monitoring channel.
+- Hide neuron constructor (Neuron::new) into private scope. Use Neuron::build to create neuron from now.
+- Extend Neuron::receive() args list.
+
+### Removed
+
+- Removed method Network::activate_trace_log()
 
 ## [0.1.3] - 2024-11-19
 
