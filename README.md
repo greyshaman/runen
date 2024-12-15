@@ -48,7 +48,7 @@
 
 Дендрит, принимающий сигнал, прошедший через ограничение, имеет параметр веса. Вес может быть положительным (возбуждение) или отрицательным (торможение), и значение сигнала умножается на этот вес.
 
-Нейрон асинхронно обрабатывает сигнал от дендрита и объединяет его с другими сигналами, полученными от других дендритов. Это накопление происходит до того, как нейрон сбрасывается, что происходит, когда поступают все сигналы от активированных аксонов или когда повторный сигнал поступает на дендрит. Когда нейрон сбрасывает данные из сумматора, он передает накопленное значение аксону и записывает единичное значение в сумматор. Таким образом, даже если нейрон получает нулевой входящий сигнал, он все равно выдает сигнал при сбросе.
+Нейрон асинхронно обрабатывает сигнал от дендрита и объединяет его с другими сигналами, полученными от других дендритов. Это накопление происходит до того, как нейрон сбрасывается, что происходит, когда поступают все сигналы от активированных аксонов или когда повторный сигнал поступает на дендрит. Когда нейрон сбрасывает данные из сумматора, он передает накопленное значение аксону и записывает значение предвзятости в сумматор. Таким образом, даже если нейрон получает нулевой входящий сигнал, он все равно выдает сигнал при сбросе.
 
 Аксон передает положительный сигнал, полученный от сумматора, во все подключенные к нему синапсы.
 
@@ -97,7 +97,7 @@ let net = Network::new().unwrap();
 ```rust
 let net = Arc::new(Network::new().unwrap());
 let neuron_input_cfg = vec![];
-let neuron = net.create_neuron(net.clone(), neuron_input_cfg)
+let neuron = net.create_neuron(net.clone(), 1, neuron_input_cfg)
   .await
   .unwrap();
 ```
@@ -112,7 +112,7 @@ let neuron_input_cfg = vec![
   InputCfg::new(2, 2, 1).unwrap(),
   InputCfg::new(1, 1, 1).unwrap()
 ];
-let neuron = net.create_neuron(net.clone(), neuron_input_cfg)
+let neuron = net.create_neuron(net.clone(), 1, neuron_input_cfg)
   .await
   .unwrap();
 
@@ -130,10 +130,10 @@ let neuron = net.create_neuron(net.clone(), neuron_input_cfg)
 ```rust
 .... create net instance ....
 
-let neuron_1 = net.create_neuron(net.clone(), vec![]).await.unwrap();
+let neuron_1 = net.create_neuron(net.clone(), 1, vec![]).await.unwrap();
 let src_id = neuron_1.get_id();
 
-let neuron_2 = net.create_neuron(net.clone(), vec![
+let neuron_2 = net.create_neuron(net.clone(), 1, vec![
   InputCfg::new(1, 1, 1).unwrap(),
   InputCfg::new(2, 1, -1).unwrap()
 ])
@@ -155,7 +155,7 @@ assert!(net.connect_neurons(&src_id, &dst_id, 1).await.is_ok());
 ```rust
 let net = Arc::new(Network::new().unwrap());
 
-let neuron = net.create_neuron(net.clone(), vec![
+let neuron = net.create_neuron(net.clone(), 1, vec![
   InputCfg::new(1, 1, 1).unwrap(),
   InputCfg::new(2, 1, -1).unwrap()
 ])
@@ -182,7 +182,7 @@ let net = Arc::new(Network::new().unwrap());
 .... create neurons for other layers ....
 
 // create terminal output neuron
-let out_neuron = net.create_neuron(net.clone(), vec![]).await.unwrap();
+let out_neuron = net.create_neuron(net.clone(), 1, vec![]).await.unwrap();
 let out_id = out_neuron.get_id();
 
 // assign axon of out_neuron as output port
@@ -244,7 +244,7 @@ A synapse can be activated if it has a connection to the axon of a neuron. The s
 
 The dendrite that receives the signal that has passed through the restriction has a weight parameter. The weight can be positive (arousal) or negative (inhibition), and the signal value is multiplied by this weight.
 
-The neuron asynchronously processes the signal from the dendrite and combines it with other signals received from other dendrites. This accumulation occurs before the neuron is reset, which happens when all signals from activated axons arrive or when a repeated signal arrives at the dendrite. When the neuron resets data from the adder, it transmits the accumulated value to the axon and writes a single value to the adder. Thus, even if the neuron receives a zero incoming signal, it still outputs a signal when reset.
+The neuron asynchronously processes the signal from the dendrite and combines it with other signals received from other dendrites. This accumulation occurs before the neuron is reset, which happens when all signals from activated axons arrive or when a repeated signal arrives at the dendrite. When the neuron resets data from the adder, it transmits the accumulated value to the axon and writes a bias value to the adder. Thus, even if the neuron receives a zero incoming signal, it still outputs a signal when reset.
 
 The axon transmits the positive signal received from the adder to all the synapses connected to it.
 
@@ -289,7 +289,7 @@ If you pass an empty vector, a neuron with one input will be created (a synapse 
 ```rust
 let net = Arc::new(Network::new().unwrap());
 let neuron_input_cfg = vec![];
-let neuron = net.create_neuron(net.clone(), neuron_input_cfg)
+let neuron = net.create_neuron(net.clone(), 1, neuron_input_cfg)
   .await
   .unwrap();
 ```
@@ -304,7 +304,7 @@ let neuron_input_cfg = vec![
   InputCfg::new(2, 2, 1).unwrap(),
   InputCfg::new(1, 1, 1).unwrap()
 ];
-let neuron = net.create_neuron(net.clone(), neuron_input_cfg)
+let neuron = net.create_neuron(net.clone(), 1, neuron_input_cfg)
   .await
   .unwrap();
 
@@ -322,10 +322,10 @@ The axon of the neuron with the identifier `srs_id` connects to the free synapse
 ```rust
 .... create net instance ....
 
-let neuron_1 = net.create_neuron(net.clone(), vec![]).await.unwrap();
+let neuron_1 = net.create_neuron(net.clone(), 1, vec![]).await.unwrap();
 let src_id = neuron_1.get_id();
 
-let neuron_2 = net.create_neuron(net.clone(), vec![
+let neuron_2 = net.create_neuron(net.clone(), 1, vec![
   InputCfg::new(1, 1, 1).unwrap(),
   InputCfg::new(2, 1, -1).unwrap()
 ])
@@ -347,7 +347,7 @@ Here `network_port` is the number of the input port, `neuron_id` is the identifi
 ```rust
 let net = Arc::new(Network::new().unwrap());
 
-let neuron = net.create_neuron(net.clone(), vec![
+let neuron = net.create_neuron(net.clone(), 1, vec![
   InputCfg::new(1, 1, 1).unwrap(),
   InputCfg::new(2, 1, -1).unwrap()
 ])
@@ -374,7 +374,7 @@ let net = Arc::new(Network::new().unwrap());
 .... create neurons for other layers ....
 
 // create terminal output neuron
-let out_neuron = net.create_neuron(net.clone(), vec![]).await.unwrap();
+let out_neuron = net.create_neuron(net.clone(), 1, vec![]).await.unwrap();
 let out_id = out_neuron.get_id();
 
 // assign axon of out_neuron as output port

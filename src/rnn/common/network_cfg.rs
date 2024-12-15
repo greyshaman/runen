@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 
-use super::input_cfg::InputCfg;
+use super::{
+    input_cfg::InputCfg,
+    signal::{Signal, Weight},
+};
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum LinkCfg {
@@ -23,6 +26,7 @@ pub enum LinkCfg {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct NeuronCfg {
     pub id: String,
+    pub bias: Weight,
     pub input_configs: Vec<InputCfg>,
 }
 
@@ -46,6 +50,7 @@ mod tests {
         let neuron_cfgs = vec![
             NeuronCfg {
                 id: String::from("M0Z0"),
+                bias: 1,
                 input_configs: vec![
                     InputCfg::new(2, 2, 1).unwrap(),
                     InputCfg::new(1, 1, 2).unwrap(),
@@ -53,14 +58,17 @@ mod tests {
             },
             NeuronCfg {
                 id: String::from("M0Z1"),
+                bias: 1,
                 input_configs: vec![InputCfg::new(1, 1, 1).unwrap()],
             },
             NeuronCfg {
                 id: String::from("M0Z2"),
+                bias: 1,
                 input_configs: vec![InputCfg::new(3, 2, 1).unwrap()],
             },
             NeuronCfg {
                 id: String::from("M0Z3"),
+                bias: 1,
                 input_configs: vec![
                     InputCfg::new(1, 1, 1).unwrap(),
                     InputCfg::new(3, 1, 2).unwrap(),
@@ -115,7 +123,7 @@ mod tests {
 
         let cfg_json = serde_json::to_string(&cfg).unwrap();
 
-        let expected_string = "{\"inputs\":3,\"outputs\":2,\"neurons\":[{\"id\":\"M0Z0\",\"input_configs\":[{\"capacity_max\":2,\"regeneration\":2,\"weight\":1},{\"capacity_max\":1,\"regeneration\":1,\"weight\":2}]},{\"id\":\"M0Z1\",\"input_configs\":[{\"capacity_max\":1,\"regeneration\":1,\"weight\":1}]},{\"id\":\"M0Z2\",\"input_configs\":[{\"capacity_max\":3,\"regeneration\":2,\"weight\":1}]},{\"id\":\"M0Z3\",\"input_configs\":[{\"capacity_max\":1,\"regeneration\":1,\"weight\":1},{\"capacity_max\":3,\"regeneration\":1,\"weight\":2}]}],\"links\":[{\"Input\":{\"input_port\":0,\"dst_id\":\"M0Z0\",\"dst_synapse_idx\":0}},{\"Input\":{\"input_port\":1,\"dst_id\":\"M0Z0\",\"dst_synapse_idx\":1}},{\"Input\":{\"input_port\":2,\"dst_id\":\"M0Z1\",\"dst_synapse_idx\":0}},{\"Inner\":{\"src_id\":\"M0Z0\",\"dst_id\":\"M0Z2\",\"dst_synapse_idx\":0}},{\"Inner\":{\"src_id\":\"M0Z1\",\"dst_id\":\"M0Z3\",\"dst_synapse_idx\":0}},{\"Inner\":{\"src_id\":\"M0Z1\",\"dst_id\":\"M0Z3\",\"dst_synapse_idx\":1}},{\"Output\":{\"src_id\":\"M0Z2\",\"output_port\":0}},{\"Output\":{\"src_id\":\"M0Z3\",\"output_port\":1}}]}";
+        let expected_string = "{\"inputs\":3,\"outputs\":2,\"neurons\":[{\"id\":\"M0Z0\",\"bias\":1,\"input_configs\":[{\"capacity_max\":2,\"regeneration\":2,\"weight\":1},{\"capacity_max\":1,\"regeneration\":1,\"weight\":2}]},{\"id\":\"M0Z1\",\"bias\":1,\"input_configs\":[{\"capacity_max\":1,\"regeneration\":1,\"weight\":1}]},{\"id\":\"M0Z2\",\"bias\":1,\"input_configs\":[{\"capacity_max\":3,\"regeneration\":2,\"weight\":1}]},{\"id\":\"M0Z3\",\"bias\":1,\"input_configs\":[{\"capacity_max\":1,\"regeneration\":1,\"weight\":1},{\"capacity_max\":3,\"regeneration\":1,\"weight\":2}]}],\"links\":[{\"Input\":{\"input_port\":0,\"dst_id\":\"M0Z0\",\"dst_synapse_idx\":0}},{\"Input\":{\"input_port\":1,\"dst_id\":\"M0Z0\",\"dst_synapse_idx\":1}},{\"Input\":{\"input_port\":2,\"dst_id\":\"M0Z1\",\"dst_synapse_idx\":0}},{\"Inner\":{\"src_id\":\"M0Z0\",\"dst_id\":\"M0Z2\",\"dst_synapse_idx\":0}},{\"Inner\":{\"src_id\":\"M0Z1\",\"dst_id\":\"M0Z3\",\"dst_synapse_idx\":0}},{\"Inner\":{\"src_id\":\"M0Z1\",\"dst_id\":\"M0Z3\",\"dst_synapse_idx\":1}},{\"Output\":{\"src_id\":\"M0Z2\",\"output_port\":0}},{\"Output\":{\"src_id\":\"M0Z3\",\"output_port\":1}}]}";
         assert_eq!(cfg_json, expected_string);
     }
 
@@ -124,6 +132,7 @@ mod tests {
         let neuron_cfgs = vec![
             NeuronCfg {
                 id: String::from("M0Z0"),
+                bias: 1,
                 input_configs: vec![
                     InputCfg::new(3, 2, 1).unwrap(),
                     InputCfg::new(1, 1, 2).unwrap(),
@@ -131,6 +140,7 @@ mod tests {
             },
             NeuronCfg {
                 id: String::from("M0Z1"),
+                bias: 1,
                 input_configs: vec![InputCfg::new(1, 1, 1).unwrap()],
             },
         ];
@@ -163,7 +173,7 @@ mod tests {
 
         let cfg_yaml = serde_yaml::to_string(&cfg).unwrap();
 
-        let expected_string = "inputs: 2\noutputs: 1\nneurons:\n- id: M0Z0\n  input_configs:\n  - capacity_max: 3\n    regeneration: 2\n    weight: 1\n  - capacity_max: 1\n    regeneration: 1\n    weight: 2\n- id: M0Z1\n  input_configs:\n  - capacity_max: 1\n    regeneration: 1\n    weight: 1\nlinks:\n- !Input\n  input_port: 0\n  dst_id: M0Z0\n  dst_synapse_idx: 0\n- !Input\n  input_port: 1\n  dst_id: M0Z0\n  dst_synapse_idx: 1\n- !Inner\n  src_id: M0Z0\n  dst_id: M0Z1\n  dst_synapse_idx: 0\n- !Output\n  src_id: M0Z1\n  output_port: 0\n";
+        let expected_string = "inputs: 2\noutputs: 1\nneurons:\n- id: M0Z0\n  bias: 1\n  input_configs:\n  - capacity_max: 3\n    regeneration: 2\n    weight: 1\n  - capacity_max: 1\n    regeneration: 1\n    weight: 2\n- id: M0Z1\n  bias: 1\n  input_configs:\n  - capacity_max: 1\n    regeneration: 1\n    weight: 1\nlinks:\n- !Input\n  input_port: 0\n  dst_id: M0Z0\n  dst_synapse_idx: 0\n- !Input\n  input_port: 1\n  dst_id: M0Z0\n  dst_synapse_idx: 1\n- !Inner\n  src_id: M0Z0\n  dst_id: M0Z1\n  dst_synapse_idx: 0\n- !Output\n  src_id: M0Z1\n  output_port: 0\n";
         assert_eq!(cfg_yaml, expected_string);
     }
 
@@ -175,6 +185,7 @@ mod tests {
             "neurons": [
                 {
                     "id": "M0Z0",
+                    "bias": 1,
                     "input_configs": [
                         {
                             "capacity_max": 1,
@@ -190,6 +201,7 @@ mod tests {
                 },
                 {
                     "id": "M0Z1",
+                    "bias": 1,
                     "input_configs": [
                         {
                             "capacity_max": 1,
@@ -249,6 +261,7 @@ mod tests {
             outputs: 1
             neurons:
             - id: M0Z0
+              bias: 1
               input_configs:
               - capacity_max: 1
                 regeneration: 1
@@ -257,6 +270,7 @@ mod tests {
                 regeneration: 1
                 weight: 1
             - id: M0Z1
+              bias: 1
               input_configs:
               - capacity_max: 1
                 regeneration: 1

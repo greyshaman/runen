@@ -68,6 +68,9 @@ pub struct NeuronStatistics {
 /// The neuron's core, which contains data that is shared between concurrent tasks.
 #[derive(Debug)]
 pub struct NeuronCore {
+    /// The neuron Bias
+    bias: Weight,
+
     /// The accumulator need to sum incoming signals.
     accumulator: Weight,
 
@@ -116,11 +119,13 @@ impl Neuron {
     /// the essence of a neuron without any connection to the control command channels.
     async fn new(
         id: &str,
+        bias: Weight,
         network: Arc<Network>,
         monitoring_sender: mpsc::WeakSender<NeuronStatistics>,
     ) -> Self {
         let core = NeuronCore {
-            accumulator: 1, // Fixme: add this value into config as bias param
+            bias,
+            accumulator: 0,
             reset_counter: 0,
             hit_counter: 0,
             dendrites: BTreeMap::new(),
@@ -142,12 +147,16 @@ impl Neuron {
     /// Creates a new neuron with all the necessary components
     /// in the specified configuration.
     pub async fn build(network: Arc<Network>, config: NeuronCfg) -> Arc<Neuron> {
-        let NeuronCfg { id, input_configs } = config;
+        let NeuronCfg {
+            id,
+            input_configs,
+            bias,
+        } = config;
 
         let mut commands_receiver = network.get_commands_receiver();
         let monitoring_sender = network.get_monitoring_sender();
 
-        let neuron = Neuron::new(&id, network, monitoring_sender).await;
+        let neuron = Neuron::new(&id, bias, network, monitoring_sender).await;
         neuron.config(input_configs).await;
 
         let neuron = Arc::new(neuron);
@@ -252,6 +261,7 @@ impl Neuron {
 
         NeuronCfg {
             id: self.get_id(),
+            bias: r_core.bias,
             input_configs,
         }
     }
@@ -475,7 +485,7 @@ impl Neuron {
             let output_signal = max(w_core.accumulator, 0) as Signal;
 
             // Reset accumulator with new signal plus excitation level
-            w_core.accumulator = weighted_signal + 1;
+            w_core.accumulator = weighted_signal + w_core.bias;
 
             // Increment neuron resets counter
             w_core.reset_counter += 1;
@@ -508,7 +518,7 @@ impl Neuron {
                 let output_signal = max(w_core.accumulator, 0) as u8;
 
                 // Reset accumulator
-                w_core.accumulator = 1;
+                w_core.accumulator = w_core.bias as Weight;
 
                 // Increment neuron resets counter
                 w_core.reset_counter += 1;
@@ -549,7 +559,7 @@ mod tests {
         #[tokio::test]
         async fn fn_status_should_return_correct_neuron_state() {
             let net = Arc::new(new_network_fixture());
-            let neuron = new_neuron_fixture(net.clone(), vec![]).await;
+            let neuron = new_neuron_fixture(net.clone(), 1, vec![]).await;
 
             let stat = net
                 .get_current_neuron_statistics(&neuron.get_id())
@@ -571,7 +581,7 @@ mod tests {
         #[tokio::test]
         async fn fn_switch_monitoring_mode_should_change_monitoring_mode() {
             let net = Arc::new(new_network_fixture());
-            let neuron = new_neuron_fixture(net.clone(), vec![]).await;
+            let neuron = new_neuron_fixture(net.clone(), 1, vec![]).await;
 
             assert_eq!(neuron.get_monitoring_mode().await, MonitoringMode::None);
 
@@ -591,7 +601,7 @@ mod tests {
         async fn sending_switch_monitoring_mode_by_command_should_change_neuron_mode_to_same_mode()
         {
             let net = Arc::new(new_network_fixture());
-            let neuron = new_neuron_fixture(net.clone(), vec![]).await;
+            let neuron = new_neuron_fixture(net.clone(), 1, vec![]).await;
 
             assert_eq!(neuron.get_monitoring_mode().await, MonitoringMode::None);
 
@@ -608,7 +618,7 @@ mod tests {
         #[tokio::test]
         async fn fn_get_input_ports_len_should_return_one() {
             let net = Arc::new(new_network_fixture());
-            let neuron = new_neuron_fixture(net.clone(), vec![]).await;
+            let neuron = new_neuron_fixture(net.clone(), 1, vec![]).await;
 
             assert_eq!(neuron.get_input_ports_len().await, 1);
         }
@@ -616,7 +626,7 @@ mod tests {
         #[tokio::test]
         async fn fn_get_connected_input_ports_len_should_return_zero() {
             let net = Arc::new(new_network_fixture());
-            let neuron = new_neuron_fixture(net.clone(), vec![]).await;
+            let neuron = new_neuron_fixture(net.clone(), 1, vec![]).await;
 
             let r_core = neuron.core.read().await;
 
@@ -626,7 +636,7 @@ mod tests {
         #[tokio::test]
         async fn fn_get_id_should_return_correct_id() {
             let net = Arc::new(new_network_fixture());
-            let neuron = new_neuron_fixture(net.clone(), vec![]).await;
+            let neuron = new_neuron_fixture(net.clone(), 1, vec![]).await;
 
             let neuron_id = neuron.get_id();
             assert!(SpecificationType::Neuron.is_id_valid(neuron_id.as_str()))
@@ -635,7 +645,7 @@ mod tests {
         #[tokio::test]
         async fn fn_get_network_should_return_network_with_correct_id() {
             let net = Arc::new(new_network_fixture());
-            let neuron = new_neuron_fixture(net.clone(), vec![]).await;
+            let neuron = new_neuron_fixture(net.clone(), 1, vec![]).await;
 
             assert!(neuron.get_network().is_some());
             assert_eq!(neuron.get_network().unwrap().get_id(), net.get_id());
@@ -644,7 +654,7 @@ mod tests {
         #[tokio::test]
         async fn number_of_dendrites_should_be_the_same_as_in_config() {
             let net = Arc::new(new_network_fixture());
-            let neuron = new_neuron_fixture(net.clone(), vec![]).await;
+            let neuron = new_neuron_fixture(net.clone(), 1, vec![]).await;
 
             neuron
                 .config(vec![
@@ -667,7 +677,7 @@ mod tests {
         #[tokio::test(flavor = "multi_thread")]
         async fn fn_provide_output_should_return_receiver() {
             let net = Arc::new(new_network_fixture());
-            let neuron = new_neuron_fixture(net.clone(), vec![]).await;
+            let neuron = new_neuron_fixture(net.clone(), 1, vec![]).await;
             let neuron_id = neuron.get_id();
 
             let receiver_orig = neuron.provide_output().await;
@@ -695,7 +705,7 @@ mod tests {
         #[tokio::test]
         async fn fn_connect_should_perform_connection_to_input_port() {
             let net = Arc::new(new_network_fixture());
-            let neuron = new_neuron_fixture(net.clone(), vec![]).await;
+            let neuron = new_neuron_fixture(net.clone(), 1, vec![]).await;
             let neuron_id = neuron.get_id();
 
             let monitor = neuron.provide_output().await;
@@ -721,8 +731,8 @@ mod tests {
         #[tokio::test]
         async fn fn_link_to_should_perform_link_to_another_neuron() {
             let net = Arc::new(new_network_fixture());
-            let neuron1 = new_neuron_fixture(net.clone(), vec![]).await;
-            let neuron2 = new_neuron_fixture(net.clone(), vec![]).await;
+            let neuron1 = new_neuron_fixture(net.clone(), 1, vec![]).await;
+            let neuron2 = new_neuron_fixture(net.clone(), 1, vec![]).await;
 
             let monitor = neuron2.provide_output().await;
             let mut w_monitor = monitor.write().await;
@@ -752,7 +762,7 @@ mod tests {
         #[tokio::test]
         async fn fn_get_network_should_return_contained_network() {
             let net = Arc::new(new_network_fixture());
-            let neuron = new_neuron_fixture(net.clone(), vec![]).await;
+            let neuron = new_neuron_fixture(net.clone(), 1, vec![]).await;
 
             let network = neuron.get_network();
             assert!(network.is_some());
@@ -771,7 +781,8 @@ mod tests {
         #[tokio::test]
         async fn fn_get_input_ports_len_should_return_configured_number_of_dendrites() {
             let net = Arc::new(new_network_fixture());
-            let neuron = new_neuron_fixture(net.clone(), gen_neuron_input_config_fixture(3)).await;
+            let neuron =
+                new_neuron_fixture(net.clone(), 1, gen_neuron_input_config_fixture(3)).await;
 
             let stat = net
                 .get_current_neuron_statistics(&neuron.get_id())
@@ -788,7 +799,7 @@ mod tests {
             let net = Arc::new(new_network_fixture());
             let inputs_config1 = gen_neuron_input_config_fixture(3);
             let inputs_config2 = gen_neuron_input_config_fixture(2);
-            let neuron = new_neuron_fixture(net.clone(), inputs_config1).await;
+            let neuron = new_neuron_fixture(net.clone(), 1, inputs_config1).await;
             assert_eq!(neuron.get_input_ports_len().await, 3);
 
             neuron.config(inputs_config2).await;
@@ -799,7 +810,7 @@ mod tests {
         async fn fn_get_config_should_return_correct_config() {
             let net = Arc::new(new_network_fixture());
             let input_config = gen_neuron_input_config_fixture(3);
-            let neuron = new_neuron_fixture(net.clone(), input_config).await;
+            let neuron = new_neuron_fixture(net.clone(), 1, input_config).await;
             let expected_id = &neuron.get_id();
             let cfg = neuron.get_config().await;
 

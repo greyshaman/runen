@@ -17,6 +17,7 @@ use crate::rnn::common::command::NeuronCommand;
 use crate::rnn::common::input_cfg::InputCfg;
 use crate::rnn::common::network_cfg::NeuronCfg;
 use crate::rnn::common::rnn_error::RnnError;
+use crate::rnn::common::signal::Weight;
 use crate::rnn::common::spec_type::SpecificationType;
 use crate::rnn::common::utils::gen_id_by_spec_type;
 use crate::rnn::neural::neuron::{self, Neuron, NeuronStatistics};
@@ -36,9 +37,10 @@ pub enum MonitoringMode {
     Monitoring,
 }
 
+/// Networks mode set like as monitoring mode.
 #[derive(Debug)]
 struct Modes {
-    trace_mode: MonitoringMode,
+    monitoring_mode: MonitoringMode,
 }
 
 #[derive(Debug)]
@@ -80,7 +82,7 @@ impl Network {
             id,
             neurons: RwLock::new(BTreeMap::new()),
             modes: Arc::new(RwLock::new(Modes {
-                trace_mode: MonitoringMode::None,
+                monitoring_mode: MonitoringMode::None,
             })),
             input_interface: Arc::new(RwLock::new(BTreeMap::new())),
             output_interface: Arc::new(RwLock::new(BTreeMap::new())),
@@ -125,7 +127,7 @@ impl Network {
 
     pub async fn set_monitoring_mode(&self, mode: MonitoringMode) {
         let mut w_state = self.modes.write().await;
-        w_state.trace_mode = mode.clone();
+        w_state.monitoring_mode = mode.clone();
         let _send_command_result = self
             .commands_ch
             .sender
@@ -133,7 +135,7 @@ impl Network {
     }
 
     pub async fn get_monitoring_mode(&self) -> MonitoringMode {
-        self.modes.read().await.trace_mode.clone()
+        self.modes.read().await.monitoring_mode.clone()
     }
 
     pub async fn get_neuron(&self, id: &str) -> Option<Arc<Neuron>> {
@@ -152,6 +154,7 @@ impl Network {
     pub async fn create_neuron(
         &self,
         network: Arc<Network>,
+        bias: Weight,
         input_configs: Vec<InputCfg>,
     ) -> Result<Arc<Neuron>, Box<dyn std::error::Error>> {
         use std::collections::btree_map::Entry;
@@ -174,6 +177,7 @@ impl Network {
 
         let neuron_config = NeuronCfg {
             id: new_id.clone(),
+            bias,
             input_configs,
         };
         let mut w_neurons = self.neurons.write().await;
@@ -398,7 +402,7 @@ mod tests {
 
         for _ in 0..=1 {
             let net = net_orig.clone();
-            assert!(net.create_neuron(net.clone(), vec![]).await.is_ok());
+            assert!(net.create_neuron(net.clone(), 1, vec![]).await.is_ok());
         }
 
         let net = net_orig.clone();
@@ -409,7 +413,7 @@ mod tests {
     async fn network_can_get_neuron_after_create() {
         let net = Arc::new(Network::new().unwrap());
 
-        let neuron_rc = net.create_neuron(net.clone(), vec![]).await.unwrap();
+        let neuron_rc = net.create_neuron(net.clone(), 1, vec![]).await.unwrap();
         let neuron_id = neuron_rc.get_id();
 
         assert_eq!(net.len().await, 1);
@@ -427,7 +431,7 @@ mod tests {
     async fn network_can_remove_neuron_after_create() {
         let net = Arc::new(Network::new().unwrap());
 
-        let neuron_rc = net.create_neuron(net.clone(), vec![]).await.unwrap();
+        let neuron_rc = net.create_neuron(net.clone(), 1, vec![]).await.unwrap();
         assert_eq!(net.len().await, 1);
 
         assert!(net.remove_neuron(&neuron_rc.get_id()).await.is_ok());
@@ -438,7 +442,7 @@ mod tests {
     async fn network_should_return_error_if_remove_by_incorrect_id() {
         let net = Arc::new(Network::new().unwrap());
 
-        let neuron = net.create_neuron(net.clone(), vec![]).await.unwrap();
+        let neuron = net.create_neuron(net.clone(), 1, vec![]).await.unwrap();
         let neuron_id = neuron.get_id();
         assert_eq!(net.len().await, 1);
 
@@ -455,7 +459,7 @@ mod tests {
     async fn network_can_verify_if_contains_neuron_with_specified_id() {
         let net = Arc::new(Network::new().unwrap());
 
-        let neuron = net.create_neuron(net.clone(), vec![]).await.unwrap();
+        let neuron = net.create_neuron(net.clone(), 1, vec![]).await.unwrap();
 
         assert!(net.has_neuron(neuron.get_id().as_str()).await);
         assert!(!net.has_neuron("missed").await);
@@ -470,7 +474,7 @@ mod tests {
     #[tokio::test]
     async fn fn_get_current_neuron_statistics_should_return_some_value() {
         let net = Arc::new(new_network_fixture());
-        let neuron = net.create_neuron(net.clone(), vec![]).await.unwrap();
+        let neuron = net.create_neuron(net.clone(), 1, vec![]).await.unwrap();
         let id = neuron.get_id();
 
         assert!(net.get_current_neuron_statistics(&id).await.is_ok());
@@ -479,9 +483,9 @@ mod tests {
     #[tokio::test]
     async fn should_connect_one_neuron_to_available_port_of_another_one() {
         let net = Arc::new(new_network_fixture());
-        let neuron1 = net.create_neuron(net.clone(), vec![]).await.unwrap();
+        let neuron1 = net.create_neuron(net.clone(), 1, vec![]).await.unwrap();
         let src_id = neuron1.get_id();
-        let neuron2 = net.create_neuron(net.clone(), vec![]).await.unwrap();
+        let neuron2 = net.create_neuron(net.clone(), 1, vec![]).await.unwrap();
         let dst_id = neuron2.get_id();
 
         let res = net.connect_neurons(&src_id, &dst_id, 0).await;
@@ -505,11 +509,11 @@ mod tests {
     async fn should_not_connect_one_neuron_to_busy_port_of_another_one() {
         let net = Arc::new(new_network_fixture());
 
-        let neuron_alt = net.create_neuron(net.clone(), vec![]).await.unwrap();
+        let neuron_alt = net.create_neuron(net.clone(), 1, vec![]).await.unwrap();
         let alt_id = neuron_alt.get_id();
-        let neuron1 = net.create_neuron(net.clone(), vec![]).await.unwrap();
+        let neuron1 = net.create_neuron(net.clone(), 1, vec![]).await.unwrap();
         let src_id = neuron1.get_id();
-        let neuron2 = net.create_neuron(net.clone(), vec![]).await.unwrap();
+        let neuron2 = net.create_neuron(net.clone(), 1, vec![]).await.unwrap();
         let dst_id = neuron2.get_id();
 
         let res = net.connect_neurons(&src_id, &dst_id, 0).await;
@@ -523,7 +527,7 @@ mod tests {
     async fn should_not_connect_one_neuron_to_missed_one() {
         let net = Arc::new(new_network_fixture());
 
-        let neuron1 = net.create_neuron(net.clone(), vec![]).await.unwrap();
+        let neuron1 = net.create_neuron(net.clone(), 1, vec![]).await.unwrap();
         let src_id = neuron1.get_id();
         let dst_id = "M0Z555";
 
@@ -535,7 +539,7 @@ mod tests {
     async fn should_not_allow_to_connect_self_if_only_one_dendrite_exists() {
         let net = Arc::new(new_network_fixture());
 
-        let neuron = net.create_neuron(net.clone(), vec![]).await.unwrap();
+        let neuron = net.create_neuron(net.clone(), 1, vec![]).await.unwrap();
         let id = neuron.get_id();
 
         let res = net.connect_neurons(&id, &id, 0).await;
@@ -547,7 +551,7 @@ mod tests {
         let net = Arc::new(new_network_fixture());
 
         let neuron = net
-            .create_neuron(net.clone(), gen_neuron_input_config_fixture(2))
+            .create_neuron(net.clone(), 1, gen_neuron_input_config_fixture(2))
             .await
             .unwrap();
         let id = neuron.get_id();
@@ -559,10 +563,10 @@ mod tests {
     #[tokio::test]
     async fn should_set_correct_monitoring_mode_for_new_added_neuron() {
         let net = Arc::new(new_network_fixture());
-        let _n1 = net.create_neuron(net.clone(), vec![]).await.unwrap();
+        let _n1 = net.create_neuron(net.clone(), 1, vec![]).await.unwrap();
         net.set_monitoring_mode(MonitoringMode::Monitoring).await;
 
-        let n2 = net.create_neuron(net.clone(), vec![]).await.unwrap();
+        let n2 = net.create_neuron(net.clone(), 1, vec![]).await.unwrap();
         assert_eq!(n2.get_monitoring_mode().await, MonitoringMode::Monitoring);
     }
 
@@ -570,7 +574,7 @@ mod tests {
     async fn should_store_monitoring_records_on_signal_operation() {
         let net = Arc::new(new_network_fixture());
         net.set_monitoring_mode(MonitoringMode::Monitoring).await;
-        let n = net.create_neuron(net.clone(), vec![]).await.unwrap();
+        let n = net.create_neuron(net.clone(), 1, vec![]).await.unwrap();
         assert!(net.setup_input(0, &n.get_id(), 0).await.is_ok());
         assert!(net.setup_output(0, &n.get_id()).await.is_ok());
 

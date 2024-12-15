@@ -18,11 +18,11 @@ async fn test_signal_propagation() {
         InputCfg::new(2, 2, 1).unwrap(),
     ];
 
-    let neuron0 = net.create_neuron(net.clone(), vec![]).await.unwrap();
+    let neuron0 = net.create_neuron(net.clone(), 1, vec![]).await.unwrap();
     let id0 = neuron0.get_id();
-    let neuron1 = net.create_neuron(net.clone(), config1).await.unwrap();
+    let neuron1 = net.create_neuron(net.clone(), 1, config1).await.unwrap();
     let id1 = neuron1.get_id();
-    let neuron2 = net.create_neuron(net.clone(), config2).await.unwrap();
+    let neuron2 = net.create_neuron(net.clone(), 1, config2).await.unwrap();
     let id2 = neuron2.get_id();
 
     // create inter neuron links

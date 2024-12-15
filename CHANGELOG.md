@@ -15,6 +15,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Added chrono(v0.4.38) to allow to fix time moment for monitoring records.
 - Added command broadcast channel to send command from network to neurons. Implemented switch_monitoring_mode command.
 - Implementation of monitoring neuron activity (when signal receiving).
+- Added bias parameter for neuron
 
 ### Changed
 
