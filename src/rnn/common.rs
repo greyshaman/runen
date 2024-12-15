@@ -1,5 +1,6 @@
 pub mod rnn_error;
 pub mod signal;
+pub mod status;
 pub mod utils;
 
 pub mod spec_type;

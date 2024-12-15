@@ -17,10 +17,11 @@ use crate::rnn::common::command::NeuronCommand;
 use crate::rnn::common::input_cfg::InputCfg;
 use crate::rnn::common::network_cfg::NeuronCfg;
 use crate::rnn::common::rnn_error::RnnError;
-use crate::rnn::common::signal::Weight;
+use crate::rnn::common::signal::{Signal, Weight};
 use crate::rnn::common::spec_type::SpecificationType;
+use crate::rnn::common::status::Status;
 use crate::rnn::common::utils::gen_id_by_spec_type;
-use crate::rnn::neural::neuron::{self, Neuron, NeuronStatistics};
+use crate::rnn::neural::neuron::{self, Neuron};
 
 static ID_COUNTER: AtomicUsize = AtomicUsize::new(0_usize);
 static CHANNEL_CAPACITY: usize = 5;
@@ -50,8 +51,8 @@ struct CommandsCh {
 
 #[derive(Debug)]
 struct MonitoringCh {
-    sender: Arc<mpsc::Sender<neuron::NeuronStatistics>>,
-    store: Arc<RwLock<Vec<NeuronStatistics>>>,
+    sender: Arc<mpsc::Sender<Status>>,
+    store: Arc<RwLock<Vec<Status>>>,
 }
 
 /// Network is a high level container to other containers (neurons)
@@ -103,7 +104,7 @@ impl Network {
 
         let _ = &net.receivers_tracker.spawn(async move {
             tokio::select! {
-                () = Self::monitoring_receiver_task(monitoring_store_cloned, monitoring_receiver) => {}
+                () = Self::monitoring_save_task(monitoring_store_cloned, monitoring_receiver) => {}
                 () = cancel_token_cloned.cancelled() => {
                     println!("Waiting to shutdown....");
                     time::sleep(Duration::from_millis(GRACEFUL_SHUTDOWN_PERIOD)).await;
@@ -115,9 +116,9 @@ impl Network {
         Ok(net)
     }
 
-    async fn monitoring_receiver_task(
-        monitoring_store: Arc<RwLock<Vec<NeuronStatistics>>>,
-        mut monitoring_receiver: mpsc::Receiver<NeuronStatistics>,
+    async fn monitoring_save_task(
+        monitoring_store: Arc<RwLock<Vec<Status>>>,
+        mut monitoring_receiver: mpsc::Receiver<Status>,
     ) {
         while let Some(neuron_state) = monitoring_receiver.recv().await {
             let mut w_monitoring_store = monitoring_store.write().await;
@@ -147,7 +148,7 @@ impl Network {
         self.commands_ch.sender.subscribe()
     }
 
-    pub fn get_monitoring_sender(&self) -> mpsc::WeakSender<NeuronStatistics> {
+    pub fn get_monitoring_sender(&self) -> mpsc::WeakSender<Status> {
         self.monitoring_ch.sender.downgrade()
     }
 
@@ -244,9 +245,16 @@ impl Network {
         self.neurons.read().await.len()
     }
 
+    // pub fn send_statistics(&self, stc_id: &str)
+
     /// Send signal to port connected to synapse
-    pub async fn input(&self, signal: u8, port: usize) -> Result<usize, Box<dyn Error>> {
+    pub async fn input(&self, signal: Signal, port: usize) -> Result<usize, Box<dyn Error>> {
         if let Some(synapse) = self.input_interface.read().await.get(&port) {
+            {
+                if self.get_monitoring_mode().await == MonitoringMode::Monitoring {
+                    // self.send_statistics()
+                }
+            }
             let r_synapse = synapse.read().await;
             r_synapse
                 .send(signal)
@@ -288,7 +296,7 @@ impl Network {
         }
     }
 
-    pub async fn pop_monitoring_store(&self) -> Vec<NeuronStatistics> {
+    pub async fn pop_monitoring_store(&self) -> Vec<Status> {
         let mut w_monitoring_store = self.monitoring_ch.store.write().await;
         let snapshot = w_monitoring_store.clone();
         w_monitoring_store.clear();
@@ -298,9 +306,9 @@ impl Network {
     pub async fn get_current_neuron_statistics(
         &self,
         neuron_id: &str,
-    ) -> Result<NeuronStatistics, Box<dyn Error>> {
+    ) -> Result<Status, Box<dyn Error>> {
         if let Some(target) = self.get_neuron(neuron_id).await {
-            Ok(Neuron::prepare_statistics(&target.get_id(), &target.get_core()).await)
+            Ok(Neuron::prepare_status(&target.get_id(), &target.get_core()).await)
         } else {
             Err(Box::new(RnnError::IdNotFound))
         }
@@ -492,14 +500,23 @@ mod tests {
         assert!(res.is_ok());
 
         let src_stat = net.get_current_neuron_statistics(&src_id).await;
-
         assert!(src_stat.is_ok());
+        let src_stat = match src_stat.unwrap() {
+            Status::Neuron(info) => Some(info),
+            _ => None,
+        };
+        assert!(src_stat.is_some());
         let src_stat = src_stat.unwrap();
         assert_eq!(src_stat.dendrite_count, 1);
         assert_eq!(src_stat.dendrite_connected_count, 0);
 
         let dst_stat = net.get_current_neuron_statistics(&dst_id).await;
         assert!(dst_stat.is_ok());
+        let dst_stat = match dst_stat.unwrap() {
+            Status::Neuron(info) => Some(info),
+            _ => None,
+        };
+        assert!(dst_stat.is_some());
         let dst_stat = dst_stat.unwrap();
         assert_eq!(dst_stat.dendrite_count, 1);
         assert_eq!(dst_stat.dendrite_connected_count, 1);

@@ -28,42 +28,10 @@ use crate::rnn::common::network_cfg::NeuronCfg;
 use crate::rnn::common::rnn_error::RnnError;
 use crate::rnn::common::signal::Signal;
 use crate::rnn::common::signal::Weight;
+use crate::rnn::common::status::NeuronInfo;
+use crate::rnn::common::status::Status;
 use crate::rnn::layouts::network::MonitoringMode;
 use crate::rnn::layouts::network::Network;
-
-/// Current neuron state.
-#[derive(Debug, Clone)]
-pub struct NeuronStatistics {
-    /// The state of the neuron at a time.
-    pub timestamp: DateTime<Utc>,
-
-    /// The neuron id.
-    pub id: String,
-
-    /// Total number of dendrites.
-    pub dendrite_count: usize,
-
-    /// The number of dendrites have incoming connection.
-    pub dendrite_connected_count: usize,
-
-    /// The number of dendrites that receive signals after the last accumulator reset.
-    pub dendrite_hit_count: usize,
-
-    /// The number of neuron resets.
-    pub reset_count: u64,
-
-    /// The number of total signal to neuron hits.
-    pub hit_count: u64,
-
-    /// The accumulator value
-    pub accumulator: Weight,
-
-    /// The number of active receivers.
-    pub receiver_count: usize,
-
-    /// The sum of dendrites weight
-    pub total_weight: Weight,
-}
 
 /// The neuron's core, which contains data that is shared between concurrent tasks.
 #[derive(Debug)]
@@ -100,7 +68,7 @@ pub struct NeuronCore {
     /// Tracker is a collection of these tasks
     receivers_task_tracker: TaskTracker,
 
-    monitoring_sender: mpsc::WeakSender<NeuronStatistics>,
+    monitoring_sender: mpsc::WeakSender<Status>,
 
     monitoring_mode: MonitoringMode,
     // commands_receiver: broadcast::Receiver<NeuronCommands>,
@@ -121,7 +89,7 @@ impl Neuron {
         id: &str,
         bias: Weight,
         network: Arc<Network>,
-        monitoring_sender: mpsc::WeakSender<NeuronStatistics>,
+        monitoring_sender: mpsc::WeakSender<Status>,
     ) -> Self {
         let core = NeuronCore {
             bias,
@@ -404,7 +372,7 @@ impl Neuron {
         id: &str,
         core: &Arc<RwLock<NeuronCore>>,
     ) -> Result<(), RnnError> {
-        let statistics = Self::prepare_statistics(id, core).await;
+        let statistics = Self::prepare_status(id, core).await;
 
         let r_core = core.read().await;
         if let Some(sender) = r_core.monitoring_sender.upgrade() {
@@ -419,7 +387,7 @@ impl Neuron {
         }
     }
 
-    pub async fn prepare_statistics(id: &str, core: &Arc<RwLock<NeuronCore>>) -> NeuronStatistics {
+    pub async fn prepare_status(id: &str, core: &Arc<RwLock<NeuronCore>>) -> Status {
         let r_core = core.read().await;
         let dendrite_count = r_core.dendrites.len();
         let dendrite_connected_count = Self::get_connected_input_ports_len(&r_core.dendrites);
@@ -435,7 +403,7 @@ impl Neuron {
         let total_weight = r_core.dendrites.values().map(|d| d.config.weight).sum();
         let now = Utc::now();
 
-        NeuronStatistics {
+        Status::Neuron(NeuronInfo {
             timestamp: now,
             id: id.to_string(),
             dendrite_count,
@@ -446,7 +414,7 @@ impl Neuron {
             reset_count,
             hit_count,
             total_weight,
-        }
+        })
     }
 
     fn get_connected_input_ports_len(dendrites: &BTreeMap<usize, Dendrite>) -> usize {
@@ -565,6 +533,12 @@ mod tests {
                 .get_current_neuron_statistics(&neuron.get_id())
                 .await
                 .unwrap();
+            let stat = match stat {
+                Status::Neuron(info) => Some(info),
+                _ => None,
+            };
+            assert!(stat.is_some());
+            let stat = stat.unwrap();
 
             assert!(stat.timestamp.timestamp().is_positive());
             assert_eq!(stat.id, neuron.get_id());
@@ -698,8 +672,13 @@ mod tests {
                 assert!(res.is_ok());
             }
 
-            let stat = net.get_current_neuron_statistics(&neuron_id).await.unwrap();
-            assert_eq!(stat.receiver_count, 1);
+            if let Status::Neuron(stat) =
+                net.get_current_neuron_statistics(&neuron_id).await.unwrap()
+            {
+                assert_eq!(stat.receiver_count, 1);
+            } else {
+                assert!(false);
+            }
         }
 
         #[tokio::test]
@@ -721,11 +700,16 @@ mod tests {
             }
             assert!(res.is_ok());
 
-            let stat = net.get_current_neuron_statistics(&neuron_id).await.unwrap();
-            assert_eq!(stat.dendrite_connected_count, 1);
-            assert_eq!(stat.receiver_count, 1);
-            assert_eq!(stat.hit_count, 1);
-            assert_eq!(stat.reset_count, 1);
+            if let Status::Neuron(stat) =
+                net.get_current_neuron_statistics(&neuron_id).await.unwrap()
+            {
+                assert_eq!(stat.dendrite_connected_count, 1);
+                assert_eq!(stat.receiver_count, 1);
+                assert_eq!(stat.hit_count, 1);
+                assert_eq!(stat.reset_count, 1);
+            } else {
+                assert!(false);
+            }
         }
 
         #[tokio::test]
@@ -755,8 +739,12 @@ mod tests {
                 .get_current_neuron_statistics(&neuron1.get_id())
                 .await
                 .unwrap();
-            assert_eq!(stat.reset_count, 1);
-            assert_eq!(stat.hit_count, 1);
+            if let Status::Neuron(info) = stat {
+                assert_eq!(info.reset_count, 1);
+                assert_eq!(info.hit_count, 1);
+            } else {
+                assert!(false);
+            }
         }
 
         #[tokio::test]
@@ -789,9 +777,13 @@ mod tests {
                 .await
                 .unwrap();
 
-            assert_eq!(neuron.get_input_ports_len().await, 3);
-            assert_eq!(stat.dendrite_connected_count, 0);
-            assert_eq!(stat.total_weight, 6);
+            if let Status::Neuron(info) = stat {
+                assert_eq!(neuron.get_input_ports_len().await, 3);
+                assert_eq!(info.dendrite_connected_count, 0);
+                assert_eq!(info.total_weight, 6);
+            } else {
+                assert!(false);
+            }
         }
 
         #[tokio::test]

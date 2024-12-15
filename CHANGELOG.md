@@ -22,6 +22,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Change Network structure: added commands channel and improve monitoring channel.
 - Hide neuron constructor (Neuron::new) into private scope. Use Neuron::build to create neuron from now.
 - Extend Neuron::receive() args list.
+- Changed monitoring statistics to component status
 
 ### Removed
 

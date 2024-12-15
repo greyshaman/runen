@@ -1,6 +1,6 @@
 use std::{sync::Arc, time::Duration};
 
-use librunen::rnn::{common::input_cfg::InputCfg, layouts::network::Network};
+use librunen::rnn::{common::{input_cfg::InputCfg, status::Status}, layouts::network::Network};
 use tokio::time::sleep;
 
 #[tokio::test]
@@ -51,7 +51,11 @@ async fn test_signal_propagation() {
         .get_current_neuron_statistics(&neuron0.get_id())
         .await
         .unwrap();
-    assert_eq!(state0.hit_count, 2);
+    if let Status::Neuron(info) = state0 {
+        assert_eq!(info.hit_count, 2);
+    } else {
+        panic!("Incorrect state format");
+    }
 
     // let results = net.pop_result_log().await;
     // assert_eq!(results.len(), 2);
