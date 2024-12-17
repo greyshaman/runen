@@ -10,7 +10,6 @@ use std::error::Error;
 use std::sync::Arc;
 use std::sync::Weak;
 
-use chrono::DateTime;
 use chrono::Utc;
 use tokio::sync::broadcast;
 use tokio::sync::broadcast::Receiver;
@@ -180,7 +179,7 @@ impl Neuron {
                     tokio::task::spawn(async { Ok(()) })
                 }
             } else {
-                tokio::task::spawn(async { Err(RnnError::IdNotFound) })
+                tokio::task::spawn(async move { Err(RnnError::DendriteNotFound(port)) })
             }
         };
 
@@ -256,6 +255,7 @@ impl Neuron {
                 |tx| tx.subscribe(),
             )
         };
+
         Arc::new(RwLock::new(rx))
     }
 
@@ -287,7 +287,7 @@ impl Neuron {
         &self,
         src_id: &str,
         port: usize,
-        receiver: Arc<RwLock<Receiver<u8>>>,
+        receiver: Arc<RwLock<Receiver<Signal>>>,
     ) -> Result<(), Box<dyn Error>> {
         {
             // exclusive lock core
@@ -304,9 +304,10 @@ impl Neuron {
                     dendrite.synapse_capacity = dendrite.config.capacity_max;
 
                     // Set receiver half of connecting channel
-                    dendrite.synapse = Some(receiver.clone());
 
-                    let synapse = receiver.clone();
+                    dendrite.synapse = Some(receiver);
+
+                    let synapse = dendrite.synapse.as_ref().unwrap().clone();
                     let core_cloned = self.core.clone();
                     let id_cloned = self.get_id();
 
@@ -336,14 +337,14 @@ impl Neuron {
                     Ok(())
                 } else {
                     // Synapse already has connection then notify about it
-                    Err(Box::new(RnnError::IdBusy(format!(
+                    Err(Box::new(RnnError::PortBusy(format!(
                         "input port {} already connected",
                         port
                     ))))
                 }
             } else {
                 // Neuron does not have input with specified port number
-                Err(Box::new(RnnError::IdNotFound))
+                Err(Box::new(RnnError::DendriteNotFound(port)))
             }
         }
     }
@@ -530,7 +531,7 @@ mod tests {
             let neuron = new_neuron_fixture(net.clone(), 1, vec![]).await;
 
             let stat = net
-                .get_current_neuron_statistics(&neuron.get_id())
+                .get_current_neuron_status(&neuron.get_id())
                 .await
                 .unwrap();
             let stat = match stat {
@@ -672,9 +673,7 @@ mod tests {
                 assert!(res.is_ok());
             }
 
-            if let Status::Neuron(stat) =
-                net.get_current_neuron_statistics(&neuron_id).await.unwrap()
-            {
+            if let Status::Neuron(stat) = net.get_current_neuron_status(&neuron_id).await.unwrap() {
                 assert_eq!(stat.receiver_count, 1);
             } else {
                 assert!(false);
@@ -700,9 +699,7 @@ mod tests {
             }
             assert!(res.is_ok());
 
-            if let Status::Neuron(stat) =
-                net.get_current_neuron_statistics(&neuron_id).await.unwrap()
-            {
+            if let Status::Neuron(stat) = net.get_current_neuron_status(&neuron_id).await.unwrap() {
                 assert_eq!(stat.dendrite_connected_count, 1);
                 assert_eq!(stat.receiver_count, 1);
                 assert_eq!(stat.hit_count, 1);
@@ -736,7 +733,7 @@ mod tests {
             assert!(res.is_ok());
 
             let stat = net
-                .get_current_neuron_statistics(&neuron1.get_id())
+                .get_current_neuron_status(&neuron1.get_id())
                 .await
                 .unwrap();
             if let Status::Neuron(info) = stat {
@@ -773,7 +770,7 @@ mod tests {
                 new_neuron_fixture(net.clone(), 1, gen_neuron_input_config_fixture(3)).await;
 
             let stat = net
-                .get_current_neuron_statistics(&neuron.get_id())
+                .get_current_neuron_status(&neuron.get_id())
                 .await
                 .unwrap();
 

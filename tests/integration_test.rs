@@ -1,6 +1,9 @@
 use std::{sync::Arc, time::Duration};
 
-use librunen::rnn::{common::{input_cfg::InputCfg, status::Status}, layouts::network::Network};
+use librunen::rnn::{
+    common::{input_cfg::InputCfg, status::Status},
+    layouts::network::Network,
+};
 use tokio::time::sleep;
 
 #[tokio::test]
@@ -48,7 +51,7 @@ async fn test_signal_propagation() {
     sleep(Duration::from_millis(1)).await;
 
     let state0 = net
-        .get_current_neuron_statistics(&neuron0.get_id())
+        .get_current_neuron_status(&neuron0.get_id())
         .await
         .unwrap();
     if let Status::Neuron(info) = state0 {

@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
-## [Unreleased]
+## [0.2.0]
 
 ### Added
 
@@ -15,14 +15,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 - Added chrono(v0.4.38) to allow to fix time moment for monitoring records.
 - Added command broadcast channel to send command from network to neurons. Implemented switch_monitoring_mode command.
 - Implementation of monitoring neuron activity (when signal receiving).
-- Added bias parameter for neuron
+- Added bias parameter for neuron.
 
 ### Changed
 
 - Change Network structure: added commands channel and improve monitoring channel.
 - Hide neuron constructor (Neuron::new) into private scope. Use Neuron::build to create neuron from now.
 - Extend Neuron::receive() args list.
-- Changed monitoring statistics to component status
+- Changed monitoring statistics to component status.
+- Change error types.
 
 ### Removed
 
