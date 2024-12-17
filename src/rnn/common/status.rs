@@ -40,8 +40,14 @@ pub struct NeuronInfo {
 pub struct PortInfo {
     /// The port status at a time.
     pub timestamp: DateTime<Utc>,
+
+    /// The port id
     pub id: String,
+
+    /// The number of total signal through port
     pub hit_count: u64,
+
+    /// Keep last signal value
     pub recent_signal: Signal,
 }
 

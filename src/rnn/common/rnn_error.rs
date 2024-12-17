@@ -3,26 +3,26 @@ use std::error::Error;
 /// Runen library errors
 #[derive(Debug)]
 pub enum RnnError {
-    /// Already has key when attempt insert element into Map or Set
-    OccupiedKey,
+    NeuronNotFound(String),
 
-    /// Not found key when try to use it to access element in Map or Set
-    IdNotFound,
+    DendriteNotFound(usize),
 
-    /// Error on attempt to create unique entity with used Id
-    IdBusy(String),
+    PortNotFound(usize),
+
+    IncorrectPortType,
+
+    PortBusy(String),
+
+    NeuronAlreadyExists(String),
 
     /// Not found matched data by provided pattern
     PatternNotFound,
 
     /// Expected data not present
-    NotPresent(String),
+    ExpectedDataNotPresent(String),
 
     /// Not supported argument value
     NotSupportedArgValue,
-
-    /// When create entity in container which should be single
-    OnlySingleAllowed,
 
     /// When connection to self not allowed
     ClosedLoop,
@@ -37,7 +37,7 @@ pub enum RnnError {
     DeadEndAxon,
 
     /// Port is not connected to any neurons.
-    AlreadyFree,
+    PortAlreadyFree,
 
     /// When attempt to send neuron status but channel has been closed.
     MonitoringChannelClosed(String),
