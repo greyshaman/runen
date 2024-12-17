@@ -2,7 +2,7 @@
 
 <center><img src="https://github.com/greyshaman/runen/raw/refs/heads/dev/images/neuro_mech_3d_l.webp" width="50%" alt="Runen Logo"></center>
 
-Цель этого проекта — создать модель, которая моделирует работу естественной нейронной сети, подобной той, что функционирует в человеческом мозгу. Мы хотим понять, как работает логика в таких нейронных сетях, и изучить различия между искусственными и естественными нейронными сетями в рамках модели.
+Цель этого проекта — создать модель, которая моделирует работу естественной нейронной сети, подобной той, что функционирует в человеческом мозгу. Есть потребность понять, как работает логика в таких нейронных сетях, и изучить различия между искусственными и естественными нейронными сетями в рамках модели. Модель может быть использованна для проверки математического подхода для сетей с нелинейным распространением сигнала.
 
 Для реализации этой модели выбран Rust, так как он обладает богатой экосистемой и множеством преимуществ, таких как высокая производительность, надежные функции безопасности, совместимость с различными платформами и возможность создания хорошо управляемых многозадачных систем.
 
@@ -36,7 +36,7 @@
 
 ## Описание
 
-Распределение и обработка сигналов в сети нейронов - увлекательный и сложный процесс. Эта модель основана на взаимодействиях между биологическими нейронами и процессах, которые происходят между ними.
+Распределение и обработка сигналов в сети нейронов - увлекательный и сложный процесс. Эта модель основана на принципах взаимодействиях между биологическими нейронами и процессах, которые происходят между ними.
 Значение "u8" представляет собой сигнал, который передается на каждый вход сети. Затем он обрабатывается и может появиться на одном из выходов сети, если только он полностью не подавлен или не отправлен через внутренние циклы.
 В действительности сигнал можно рассматривать как волну возбуждения, которая течет от входа к выходу, с возможными ответвлениями на этом пути.
 
@@ -48,7 +48,7 @@
 
 Дендрит, принимающий сигнал, прошедший через ограничение, имеет параметр веса. Вес может быть положительным (возбуждение) или отрицательным (торможение), и значение сигнала умножается на этот вес.
 
-Нейрон асинхронно обрабатывает сигнал от дендрита и объединяет его с другими сигналами, полученными от других дендритов. Это накопление происходит до того, как нейрон сбрасывается, что происходит, когда поступают все сигналы от активированных аксонов или когда повторный сигнал поступает на дендрит. Когда нейрон сбрасывает данные из сумматора, он передает накопленное значение аксону и записывает единичное значение в сумматор. Таким образом, даже если нейрон получает нулевой входящий сигнал, он все равно выдает сигнал при сбросе.
+Нейрон асинхронно обрабатывает сигнал от дендрита и объединяет его с другими сигналами, полученными от других дендритов. Это накопление происходит до того, как нейрон сбрасывается, что происходит, когда поступают все сигналы от активированных аксонов или когда повторный сигнал поступает на дендрит. Когда нейрон сбрасывает данные из сумматора, он передает накопленное значение аксону и записывает значение предвзятости в сумматор. Таким образом, даже если нейрон получает нулевой входящий сигнал, он все равно выдает сигнал при сбросе.
 
 Аксон передает положительный сигнал, полученный от сумматора, во все подключенные к нему синапсы.
 
@@ -60,9 +60,15 @@
 
 Для реализации проекта применялись:
 
-- Rust (1.82.0)
-- regex (1.11.1)
-- tokio (1.41.1)
+- Rust (начиная с 1.82.0)
+- regex (1.11)
+- tokio (1.41)
+- tokio-stream (0.1)
+- tokio-util (0.7)
+- cargo (0.4)
+- serde (1.0)
+- serde_json (1.0)
+- serde_yaml (0.9)
 
 ## Как использовать
 
@@ -75,7 +81,7 @@
 ```rust
 use librunen::rnn::layouts::network::Network;
 
-let net = Network::new();
+let net = Network::new().unwrap();
 ....
 ```
 
@@ -89,9 +95,9 @@ let net = Network::new();
 Если передать пустой вектор, то создастся нейрон с одним входом (синапс с ёмкостью = 1 и регенерацией на 1, и дендрит с весом равным 1).
 
 ```rust
-let net = Arc::new(Network::new());
+let net = Arc::new(Network::new().unwrap());
 let neuron_input_cfg = vec![];
-let neuron = net.create_neuron(net.clone(), neuron_input_cfg)
+let neuron = net.create_neuron(net.clone(), 1, neuron_input_cfg)
   .await
   .unwrap();
 ```
@@ -106,7 +112,7 @@ let neuron_input_cfg = vec![
   InputCfg::new(2, 2, 1).unwrap(),
   InputCfg::new(1, 1, 1).unwrap()
 ];
-let neuron = net.create_neuron(net.clone(), neuron_input_cfg)
+let neuron = net.create_neuron(net.clone(), 1, neuron_input_cfg)
   .await
   .unwrap();
 
@@ -124,10 +130,10 @@ let neuron = net.create_neuron(net.clone(), neuron_input_cfg)
 ```rust
 .... create net instance ....
 
-let neuron_1 = net.create_neuron(net.clone(), vec![]).await.unwrap();
+let neuron_1 = net.create_neuron(net.clone(), 1, vec![]).await.unwrap();
 let src_id = neuron_1.get_id();
 
-let neuron_2 = net.create_neuron(net.clone(), vec![
+let neuron_2 = net.create_neuron(net.clone(), 1, vec![
   InputCfg::new(1, 1, 1).unwrap(),
   InputCfg::new(2, 1, -1).unwrap()
 ])
@@ -147,9 +153,9 @@ assert!(net.connect_neurons(&src_id, &dst_id, 1).await.is_ok());
 Здесь `network_port` - номер входного порта, `neuron_id` - идентификатор нейрона, `neuron_port` - номер дендрита с синапсом, который связывается с входным портом.
 
 ```rust
-let net = Arc::new(Network::new());
+let net = Arc::new(Network::new().unwrap());
 
-let neuron = net.create_neuron(net.clone(), vec![
+let neuron = net.create_neuron(net.clone(), 1, vec![
   InputCfg::new(1, 1, 1).unwrap(),
   InputCfg::new(2, 1, -1).unwrap()
 ])
@@ -171,12 +177,12 @@ assert!(net.setup_input(0, &id, 1).await.is_ok());
 Здесь `network_port` - номер выходного порта, `neuron_id` - идентификатор нейрона аксон которого передаёт обработаный сигнал за пределы сети через порт вывода.
 
 ```rust
-let net = Arc::new(Network::new());
+let net = Arc::new(Network::new().unwrap());
 
 .... create neurons for other layers ....
 
 // create terminal output neuron
-let out_neuron = net.create_neuron(net.clone(), vec![]).await.unwrap();
+let out_neuron = net.create_neuron(net.clone(), 1, vec![]).await.unwrap();
 let out_id = out_neuron.get_id();
 
 // assign axon of out_neuron as output port
@@ -210,7 +216,7 @@ let jh0 = tokio::task::spawn(async move{
 - [x] ~~Добавить интеграционные тесты.~~
 - [ ] Улучшить взаимодействие с интерфейсами нейросети.
 - [ ] Добавить бенчмарки и профилировать код.
-- [ ] Добавить чтение/запись конфигурации: использовать serde.
+- [x] ~~Добавить чтение/запись конфигурации: использовать serde.~~
 - [ ] Реализовать обучение сети.
 - [ ] Разработать управляющую систему, которая будет управлять сетями (Создание, обучение, взаимодействие сетей).
 - [ ] Визуализировать процесс работы сети.
@@ -218,7 +224,7 @@ let jh0 = tokio::task::spawn(async move{
 
 ---
 
-The goal of this project is to create a model that simulates the operation of a natural neural network similar to the one that functions in the human brain. We want to understand how logic works in such neural networks and explore the differences between artificial and natural neural networks within the framework of the model.
+The goal of this project is to create a model that simulates the operation of a natural neural network similar to the one that functions in the human brain. There is a need to understand how logic works in such neural networks, and to study the differences between artificial and natural neural networks within the framework of the model. The model can be used to test a mathematical approach for networks with nonlinear signal propagation.
 
 Rust was chosen to implement this model, as it has a rich ecosystem and many advantages.
 These include high performance, robust security features, and compatibility with various platforms.
@@ -226,7 +232,7 @@ It is very interesting how Rust will cope with this task, but success will also 
 
 ## Description
 
-Signal distribution and processing within a network of neurons is a fascinating and complex process. This model is based on the interactions between biological neurons and the processes that occur between them.
+The distribution and processing of signals in a network of neurons is an exciting and complex process. This model is based on the principles of interaction between biological neurons and the processes that occur between them.
 The value `u8` represents a signal that is transmitted to each input of the network. It is then processed and may appear on one of the network's outputs, unless it is completely suppressed or sent through internal cycles.
 In reality, the signal can be thought of as an excitation wave that flows from the input towards the output, with possible branches along the way.
 
@@ -238,7 +244,7 @@ A synapse can be activated if it has a connection to the axon of a neuron. The s
 
 The dendrite that receives the signal that has passed through the restriction has a weight parameter. The weight can be positive (arousal) or negative (inhibition), and the signal value is multiplied by this weight.
 
-The neuron asynchronously processes the signal from the dendrite and combines it with other signals received from other dendrites. This accumulation occurs before the neuron is reset, which happens when all signals from activated axons arrive or when a repeated signal arrives at the dendrite. When the neuron resets data from the adder, it transmits the accumulated value to the axon and writes a single value to the adder. Thus, even if the neuron receives a zero incoming signal, it still outputs a signal when reset.
+The neuron asynchronously processes the signal from the dendrite and combines it with other signals received from other dendrites. This accumulation occurs before the neuron is reset, which happens when all signals from activated axons arrive or when a repeated signal arrives at the dendrite. When the neuron resets data from the adder, it transmits the accumulated value to the axon and writes a bias value to the adder. Thus, even if the neuron receives a zero incoming signal, it still outputs a signal when reset.
 
 The axon transmits the positive signal received from the adder to all the synapses connected to it.
 
@@ -246,9 +252,15 @@ The network contains a set of neurons and controls the creation, configuration a
 
 ## Dependencies
 
-- Rust (1.82.0)
-- regex (1.11.1)
-- tokio (1.41.1)
+- Rust (from 1.82.0)
+- regex (1.11)
+- tokio (1.41)
+- tokio-stream (0.1)
+- tokio-util (0.7)
+- cargo (0.4)
+- serde (1.0)
+- serde_json (1.0)
+- serde_yaml (0.9)
 
 ## Howto use
 
@@ -261,7 +273,7 @@ A neural network is created using the `Network::new()` constructor:
 ```rust
 use librunen::rnn::layouts::network::Network;
 
-let net = Network::new();
+let net = Network::new().unwrap();
 ....
 ```
 
@@ -275,9 +287,9 @@ When creating a neuron, it is necessary to provide a link to the network to whic
 If you pass an empty vector, a neuron with one input will be created (a synapse with capacity = 1 and regeneration by 1, and a dendrite with weight equal to 1).
 
 ```rust
-let net = Arc::new(Network::new());
+let net = Arc::new(Network::new().unwrap());
 let neuron_input_cfg = vec![];
-let neuron = net.create_neuron(net.clone(), neuron_input_cfg)
+let neuron = net.create_neuron(net.clone(), 1, neuron_input_cfg)
   .await
   .unwrap();
 ```
@@ -292,7 +304,7 @@ let neuron_input_cfg = vec![
   InputCfg::new(2, 2, 1).unwrap(),
   InputCfg::new(1, 1, 1).unwrap()
 ];
-let neuron = net.create_neuron(net.clone(), neuron_input_cfg)
+let neuron = net.create_neuron(net.clone(), 1, neuron_input_cfg)
   .await
   .unwrap();
 
@@ -310,10 +322,10 @@ The axon of the neuron with the identifier `srs_id` connects to the free synapse
 ```rust
 .... create net instance ....
 
-let neuron_1 = net.create_neuron(net.clone(), vec![]).await.unwrap();
+let neuron_1 = net.create_neuron(net.clone(), 1, vec![]).await.unwrap();
 let src_id = neuron_1.get_id();
 
-let neuron_2 = net.create_neuron(net.clone(), vec![
+let neuron_2 = net.create_neuron(net.clone(), 1, vec![
   InputCfg::new(1, 1, 1).unwrap(),
   InputCfg::new(2, 1, -1).unwrap()
 ])
@@ -333,9 +345,9 @@ Terminal neurons from the input layer can receive signals coming to the input po
 Here `network_port` is the number of the input port, `neuron_id` is the identifier of the neuron, `neuron_port` is the number of the dendrite with the synapse that binds to the input port.
 
 ```rust
-let net = Arc::new(Network::new());
+let net = Arc::new(Network::new().unwrap());
 
-let neuron = net.create_neuron(net.clone(), vec![
+let neuron = net.create_neuron(net.clone(), 1, vec![
   InputCfg::new(1, 1, 1).unwrap(),
   InputCfg::new(2, 1, -1).unwrap()
 ])
@@ -357,12 +369,12 @@ Terminal neurons from the output layer can transmit signals to the external outp
 Here `network_port` is the number of the output port, `neuron_id` is the identifier of the neuron whose axon transmits the processed signal outside the network through the output port.
 
 ```rust
-let net = Arc::new(Network::new());
+let net = Arc::new(Network::new().unwrap());
 
 .... create neurons for other layers ....
 
 // create terminal output neuron
-let out_neuron = net.create_neuron(net.clone(), vec![]).await.unwrap();
+let out_neuron = net.create_neuron(net.clone(), 1, vec![]).await.unwrap();
 let out_id = out_neuron.get_id();
 
 // assign axon of out_neuron as output port
@@ -396,7 +408,7 @@ In this fragment, the axon of one of the neurons is assigned as the first output
 - [x] ~~Add integration tests.~~
 - [ ] Improve interaction with neural network interfaces.
 - [ ] Add benchmarks and profile the code.
-- [ ] Add read/write configuration: use serde.
+- [x] ~~Add read/write configuration: use serde.~~
 - [ ] Implement network training.
 - [ ] Develop a management system that will manage networks (Creation, training, networking).
 - [ ] Visualize the network operation process.
