@@ -5,19 +5,20 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use librunen::rnn::common::input_cfg::InputCfg;
 use librunen::rnn::layouts::network::Network;
-use librunen::rnn::neural::dendrite::InputCfg;
 use tokio::task;
 use tokio::time::sleep;
 
 async fn generate_net(net: Arc<Network>) {
     // The M0Z0 neuron
-    let neuron0 = net.create_neuron(net.clone(), vec![]).await.unwrap();
+    let neuron0 = net.create_neuron(net.clone(), 1, vec![]).await.unwrap();
 
     // The M0Z1 neuron
     let neuron1 = net
         .create_neuron(
             net.clone(),
+            1,
             vec![
                 InputCfg::new(2, 2, -1).unwrap(),
                 InputCfg::new(1, 1, 1).unwrap(),
@@ -30,6 +31,7 @@ async fn generate_net(net: Arc<Network>) {
     let neuron2 = net
         .create_neuron(
             net.clone(),
+            1,
             vec![
                 InputCfg::new(1, 1, -2).unwrap(),
                 InputCfg::new(2, 2, 1).unwrap(),
@@ -80,8 +82,6 @@ async fn main() {
             println!("-+= 1 =+- ({})", signal);
         }
     });
-
-    {}
 
     println!("Sending 0 at first bit");
     assert!(net.input(0, 0).await.is_ok());

@@ -34,7 +34,7 @@ pub fn get_component_id_fraction(
     spec_type: &SpecificationType,
 ) -> Result<usize, Box<dyn Error>> {
     if id.len() == 0 {
-        return Err(Box::new(RnnError::NotPresent(String::from(
+        return Err(Box::new(RnnError::ExpectedDataNotPresent(String::from(
             "Empty string present",
         ))));
     }

@@ -1,6 +1,9 @@
 use std::{sync::Arc, time::Duration};
 
-use librunen::rnn::{layouts::network::Network, neural::dendrite::InputCfg};
+use librunen::rnn::{
+    common::{input_cfg::InputCfg, status::Status},
+    layouts::network::Network,
+};
 use tokio::time::sleep;
 
 #[tokio::test]
@@ -18,11 +21,11 @@ async fn test_signal_propagation() {
         InputCfg::new(2, 2, 1).unwrap(),
     ];
 
-    let neuron0 = net.create_neuron(net.clone(), vec![]).await.unwrap();
+    let neuron0 = net.create_neuron(net.clone(), 1, vec![]).await.unwrap();
     let id0 = neuron0.get_id();
-    let neuron1 = net.create_neuron(net.clone(), config1).await.unwrap();
+    let neuron1 = net.create_neuron(net.clone(), 1, config1).await.unwrap();
     let id1 = neuron1.get_id();
-    let neuron2 = net.create_neuron(net.clone(), config2).await.unwrap();
+    let neuron2 = net.create_neuron(net.clone(), 1, config2).await.unwrap();
     let id2 = neuron2.get_id();
 
     // create inter neuron links
@@ -47,8 +50,15 @@ async fn test_signal_propagation() {
     assert!(net.input(1, 0).await.is_ok());
     sleep(Duration::from_millis(1)).await;
 
-    let state0 = neuron0.get_state().await;
-    assert_eq!(state0.hit_count, 2);
+    let state0 = net
+        .get_current_neuron_status(&neuron0.get_id())
+        .await
+        .unwrap();
+    if let Status::Neuron(info) = state0 {
+        assert_eq!(info.hit_count, 2);
+    } else {
+        panic!("Incorrect state format");
+    }
 
     // let results = net.pop_result_log().await;
     // assert_eq!(results.len(), 2);
