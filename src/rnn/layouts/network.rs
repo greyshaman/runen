@@ -326,7 +326,7 @@ impl Network {
             let (tx, rx) = broadcast::channel(CHANNEL_CAPACITY);
             let src_id = format!("{}I{}", self.get_id(), network_port);
             neuron
-                .connect(&src_id, neuron_port, Arc::new(RwLock::new(rx)))
+                .connect(&src_id, None, neuron_port, Arc::new(RwLock::new(rx)))
                 .await?;
             let mut w_input_interface = self.input_interface.write().await;
             match w_input_interface.entry(network_port) {

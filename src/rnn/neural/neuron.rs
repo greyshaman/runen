@@ -35,6 +35,9 @@ use crate::rnn::layouts::network::Network;
 /// The neuron's core, which contains data that is shared between concurrent tasks.
 #[derive(Debug)]
 pub struct NeuronCore {
+    /// Number of neural level
+    level: Option<usize>,
+
     /// The neuron Bias
     bias: Weight,
 
@@ -91,6 +94,7 @@ impl Neuron {
         monitoring_sender: mpsc::WeakSender<Status>,
     ) -> Self {
         let core = NeuronCore {
+            level: None,
             bias,
             accumulator: 0,
             reset_counter: 0,
@@ -265,27 +269,34 @@ impl Neuron {
     pub async fn link_to(&self, party: Arc<Neuron>, port: usize) -> Result<(), Box<dyn Error>> {
         let out = self.provide_output().await;
         let party_id = party.get_id();
-        if party_id == self.id {
+        let mut level: Option<usize> = None;
+        {
             let r_core = self.core.read().await;
-            let dendrites = &r_core.dendrites;
-            let self_connected_dendrites_count = dendrites
-                .iter()
-                .filter(|(_, d)| {
-                    d.connected
-                        .as_ref()
-                        .is_some_and(|connected| connected.to_string() == self.id)
-                })
-                .count();
-            if r_core.dendrites.len() < 2 || self_connected_dendrites_count > 0_usize {
-                return Err(Box::new(RnnError::ClosedLoop));
+            if r_core.level.is_some() {
+                level = r_core.level;
+            }
+            if party_id == self.id {
+                let dendrites = &r_core.dendrites;
+                let self_connected_dendrites_count = dendrites
+                    .iter()
+                    .filter(|(_, d)| {
+                        d.connected
+                            .as_ref()
+                            .is_some_and(|connected| connected.to_string() == self.id)
+                    })
+                    .count();
+                if r_core.dendrites.len() < 2 || self_connected_dendrites_count > 0_usize {
+                    return Err(Box::new(RnnError::ClosedLoop));
+                }
             }
         }
-        party.connect(&self.id, port, out).await
+        party.connect(&self.id, level, port, out).await
     }
 
     pub async fn connect(
         &self,
         src_id: &str,
+        src_level: Option<usize>,
         port: usize,
         receiver: Arc<RwLock<Receiver<Signal>>>,
     ) -> Result<(), Box<dyn Error>> {
@@ -310,6 +321,14 @@ impl Neuron {
                     let synapse = dendrite.synapse.as_ref().unwrap().clone();
                     let core_cloned = self.core.clone();
                     let id_cloned = self.get_id();
+
+                    if w_core.level.is_none() {
+                        if let Some(level) = src_level {
+                            w_core.level = Some(level + 1);
+                        } else {
+                            w_core.level = Some(0);
+                        }
+                    }
 
                     // Check if already has task_handler at specified port number
                     if let Entry::Occupied(task_entry) =
@@ -416,6 +435,10 @@ impl Neuron {
             hit_count,
             total_weight,
         })
+    }
+
+    pub async fn get_level(&self) -> Option<usize> {
+        self.core.read().await.level
     }
 
     fn get_connected_input_ports_len(dendrites: &BTreeMap<usize, Dendrite>) -> usize {
@@ -690,8 +713,11 @@ mod tests {
             let mut w_monitor = monitor.write().await;
 
             let (tx, rx) = broadcast::channel(2);
-            let res = neuron.connect("M0I0", 0, Arc::new(RwLock::new(rx))).await;
+            let res = neuron
+                .connect("M0I0", None, 0, Arc::new(RwLock::new(rx)))
+                .await;
             assert!(res.is_ok());
+            assert_eq!(neuron.core.read().await.level.unwrap(), 0);
 
             let res = tx.send(1);
             if let Ok(rx_signal) = w_monitor.recv().await {
@@ -720,11 +746,13 @@ mod tests {
 
             let (tx, rx) = broadcast::channel(1);
             assert!(neuron1
-                .connect("M0I0", 0, Arc::new(RwLock::new(rx)))
+                .connect("M0I0", None, 0, Arc::new(RwLock::new(rx)))
                 .await
                 .is_ok());
 
             assert!(neuron1.link_to(neuron2.clone(), 0).await.is_ok());
+            assert_eq!(neuron1.core.read().await.level, Some(0));
+            assert_eq!(neuron2.core.read().await.level, Some(1));
 
             let res = tx.send(1);
             if let Ok(rx_signal) = w_monitor.recv().await {
