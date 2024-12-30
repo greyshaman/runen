@@ -29,8 +29,8 @@ use crate::rnn::common::signal::Signal;
 use crate::rnn::common::signal::Weight;
 use crate::rnn::common::status::NeuronInfo;
 use crate::rnn::common::status::Status;
-use crate::rnn::layouts::network::MonitoringMode;
-use crate::rnn::layouts::network::Network;
+use crate::rnn::layouts::neural_network::MonitoringMode;
+use crate::rnn::layouts::neural_network::NeuralNetwork;
 
 /// The neuron's core, which contains data that is shared between concurrent tasks.
 #[derive(Debug)]
@@ -79,7 +79,7 @@ pub struct NeuronCore {
 #[derive(Debug)]
 pub struct Neuron {
     id: String,
-    network: Weak<Network>,
+    network: Weak<NeuralNetwork>,
     core: Arc<RwLock<NeuronCore>>,
 }
 
@@ -90,7 +90,7 @@ impl Neuron {
     async fn new(
         id: &str,
         bias: Weight,
-        network: Arc<Network>,
+        network: Arc<NeuralNetwork>,
         monitoring_sender: mpsc::WeakSender<Status>,
     ) -> Self {
         let core = NeuronCore {
@@ -117,7 +117,7 @@ impl Neuron {
 
     /// Creates a new neuron with all the necessary components
     /// in the specified configuration.
-    pub async fn build(network: Arc<Network>, config: NeuronCfg) -> Arc<Neuron> {
+    pub async fn build(network: Arc<NeuralNetwork>, config: NeuronCfg) -> Arc<Neuron> {
         let NeuronCfg {
             id,
             input_configs,
@@ -369,7 +369,7 @@ impl Neuron {
     }
 
     /// Get network which contains this neuron
-    pub fn get_network(&self) -> Option<Arc<Network>> {
+    pub fn get_network(&self) -> Option<Arc<NeuralNetwork>> {
         self.network.upgrade()
     }
 
@@ -542,7 +542,7 @@ mod tests {
 
         use crate::rnn::{
             common::spec_type::SpecificationType,
-            layouts::network::MonitoringMode,
+            layouts::neural_network::MonitoringMode,
             tests::fixtures::{new_network_fixture, new_neuron_fixture},
         };
 

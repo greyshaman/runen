@@ -2,13 +2,13 @@ use std::{sync::Arc, time::Duration};
 
 use librunen::rnn::{
     common::{input_cfg::InputCfg, status::Status},
-    layouts::network::Network,
+    layouts::neural_network::NeuralNetwork,
 };
 use tokio::time::sleep;
 
 #[tokio::test]
 async fn test_signal_propagation() {
-    let net = Arc::new(Network::new().unwrap());
+    let net = Arc::new(NeuralNetwork::new().unwrap());
 
     let var_name = vec![
         InputCfg::new(2, 2, -1).unwrap(),

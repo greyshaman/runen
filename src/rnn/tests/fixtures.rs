@@ -2,16 +2,16 @@ use std::sync::Arc;
 
 use crate::rnn::{
     common::{input_cfg::InputCfg, signal::Weight},
-    layouts::network::Network,
+    layouts::neural_network::NeuralNetwork,
     neural::neuron::Neuron,
 };
 
-pub fn new_network_fixture() -> Network {
-    Network::new().unwrap()
+pub fn new_network_fixture() -> NeuralNetwork {
+    NeuralNetwork::new().unwrap()
 }
 
 pub async fn new_neuron_fixture(
-    network: Arc<Network>,
+    network: Arc<NeuralNetwork>,
     bias: Weight,
     input_config: Vec<InputCfg>,
 ) -> Arc<Neuron> {

@@ -1,4 +1,4 @@
-use crate::rnn::layouts::network::{self, MonitoringMode};
+use crate::rnn::layouts::neural_network::{self, MonitoringMode};
 
 /// Commands set to control network state
 pub enum NetCommand {
@@ -9,7 +9,7 @@ pub enum NetCommand {
     SaveCfg(String),
 
     /// Switch network tracing mode. It will propagate to all neurons
-    SwitchTracingMode(network::MonitoringMode),
+    SwitchTracingMode(neural_network::MonitoringMode),
     Start,
     Stop,
     Pause,

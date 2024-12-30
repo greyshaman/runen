@@ -75,7 +75,7 @@ struct PortCore {
 
 /// Network is a high level container to other containers (neurons)
 #[derive(Debug)]
-pub struct Network {
+pub struct NeuralNetwork {
     /// The network id
     id: String,
 
@@ -105,8 +105,8 @@ pub struct Network {
     cancel_token: CancellationToken,
 }
 
-impl Network {
-    pub fn new() -> Result<Network, Box<dyn Error>> {
+impl NeuralNetwork {
+    pub fn new() -> Result<NeuralNetwork, Box<dyn Error>> {
         let (monitoring_sender, monitoring_receiver) = mpsc::channel(CHANNEL_CAPACITY);
         let (commands_sender, _commands_receiver) = broadcast::channel(CHANNEL_CAPACITY);
 
@@ -115,7 +115,7 @@ impl Network {
             unsafe { ID_COUNTER.fetch_add(1, Ordering::Relaxed) },
             &SpecificationType::Network,
         )
-        .map(|id| Network {
+        .map(|id| NeuralNetwork {
             id,
             neurons: RwLock::new(BTreeMap::new()),
             modes: Arc::new(RwLock::new(Modes {
@@ -189,7 +189,7 @@ impl Network {
 
     pub async fn create_neuron(
         &self,
-        network: Arc<Network>,
+        network: Arc<NeuralNetwork>,
         bias: Weight,
         input_configs: Vec<InputCfg>,
     ) -> Result<Arc<Neuron>, Box<dyn std::error::Error>> {
@@ -418,7 +418,7 @@ impl Network {
         }
     }
 
-    pub async fn get_output_receiver(&self, port: usize) -> Option<Arc<RwLock<Receiver<u8>>>> {
+    pub async fn get_output_receiver(&self, port: usize) -> Option<Arc<RwLock<Receiver<Signal>>>> {
         if let Some(port_core) = self.output_interface.read().await.get(&port) {
             let r_port_core = port_core.read().await;
             if let SignalHandler::Output(receiver) = &r_port_core.signal_handler {
@@ -452,7 +452,7 @@ impl Network {
     }
 }
 
-impl fmt::Display for Network {
+impl fmt::Display for NeuralNetwork {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "The Network {} ", self.id)
     }
@@ -466,15 +466,15 @@ mod tests {
 
     #[tokio::test]
     async fn should_create_two_unique_networks() {
-        let n1 = Network::new().unwrap();
-        let n2 = Network::new().unwrap();
+        let n1 = NeuralNetwork::new().unwrap();
+        let n2 = NeuralNetwork::new().unwrap();
 
         assert_ne!(n1.id, n2.id);
     }
 
     #[tokio::test]
     async fn should_create_two_neurons_in_same_network() {
-        let net_orig = Arc::new(Network::new().unwrap());
+        let net_orig = Arc::new(NeuralNetwork::new().unwrap());
 
         for _ in 0..=1 {
             let net = net_orig.clone();
@@ -487,7 +487,7 @@ mod tests {
 
     #[tokio::test]
     async fn network_can_get_neuron_after_create() {
-        let net = Arc::new(Network::new().unwrap());
+        let net = Arc::new(NeuralNetwork::new().unwrap());
 
         let neuron_rc = net.create_neuron(net.clone(), 1, vec![]).await.unwrap();
         let neuron_id = neuron_rc.get_id();
@@ -505,7 +505,7 @@ mod tests {
 
     #[tokio::test]
     async fn network_can_remove_neuron_after_create() {
-        let net = Arc::new(Network::new().unwrap());
+        let net = Arc::new(NeuralNetwork::new().unwrap());
 
         let neuron_rc = net.create_neuron(net.clone(), 1, vec![]).await.unwrap();
         assert_eq!(net.len().await, 1);
@@ -516,7 +516,7 @@ mod tests {
 
     #[tokio::test]
     async fn network_should_return_error_if_remove_by_incorrect_id() {
-        let net = Arc::new(Network::new().unwrap());
+        let net = Arc::new(NeuralNetwork::new().unwrap());
 
         let neuron = net.create_neuron(net.clone(), 1, vec![]).await.unwrap();
         let neuron_id = neuron.get_id();
@@ -533,7 +533,7 @@ mod tests {
 
     #[tokio::test]
     async fn network_can_verify_if_contains_neuron_with_specified_id() {
-        let net = Arc::new(Network::new().unwrap());
+        let net = Arc::new(NeuralNetwork::new().unwrap());
 
         let neuron = net.create_neuron(net.clone(), 1, vec![]).await.unwrap();
 
@@ -543,7 +543,7 @@ mod tests {
 
     #[tokio::test]
     async fn network_returns_correct_id_by_get_id() {
-        let net = Network::new().unwrap();
+        let net = NeuralNetwork::new().unwrap();
         assert_eq!(net.id, net.get_id());
     }
 

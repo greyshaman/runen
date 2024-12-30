@@ -6,11 +6,11 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use librunen::rnn::common::input_cfg::InputCfg;
-use librunen::rnn::layouts::network::Network;
+use librunen::rnn::layouts::neural_network::NeuralNetwork;
 use tokio::task;
 use tokio::time::sleep;
 
-async fn generate_net(net: Arc<Network>) {
+async fn generate_net(net: Arc<NeuralNetwork>) {
     // The M0Z0 neuron
     let neuron0 = net.create_neuron(net.clone(), 1, vec![]).await.unwrap();
 
@@ -60,7 +60,7 @@ async fn generate_net(net: Arc<Network>) {
 
 #[tokio::main]
 async fn main() {
-    let net = Arc::new(Network::new().unwrap());
+    let net = Arc::new(NeuralNetwork::new().unwrap());
     generate_net(net.clone()).await;
 
     let net_clone = net.clone();
