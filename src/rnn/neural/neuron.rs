@@ -132,7 +132,7 @@ impl Neuron {
 
         let neuron = Arc::new(neuron);
 
-        let neuron_cloned = neuron.clone();
+        let neuron_cloned = Arc::clone(&neuron);
 
         let _ = neuron
             .core

@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use librunen::rnn::{
-    common::{input_cfg::InputCfg, status::Status},
+    common::{configurable::Configurable, input_cfg::InputCfg, signal_processing::SignalProcessing, status::Status},
     layouts::neural_network::NeuralNetwork,
 };
 use tokio::time::sleep;

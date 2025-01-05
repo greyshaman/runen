@@ -15,14 +15,17 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 
 use crate::rnn::common::command::NeuronCommand;
+use crate::rnn::common::configurable::Configurable;
 use crate::rnn::common::input_cfg::InputCfg;
 use crate::rnn::common::network_cfg::NeuronCfg;
 use crate::rnn::common::rnn_error::RnnError;
 use crate::rnn::common::signal::{Signal, Weight};
+use crate::rnn::common::signal_processing::SignalProcessing;
 use crate::rnn::common::spec_type::SpecificationType;
 use crate::rnn::common::status::{PortInfo, Status};
 use crate::rnn::common::utils::gen_id_by_spec_type;
 use crate::rnn::neural::neuron::Neuron;
+use crate::rnn::training::trainer::Trainer;
 
 use super::signal_handler::SignalHandler;
 
@@ -73,7 +76,7 @@ struct PortCore {
     signal_handler: SignalHandler,
 }
 
-/// Network is a high level container to other containers (neurons)
+/// The Neural Network is a model of biological neurons network.
 #[derive(Debug)]
 pub struct NeuralNetwork {
     /// The network id
@@ -281,70 +284,6 @@ impl NeuralNetwork {
         self.neurons.read().await.len()
     }
 
-    /// Send signal to port connected to synapse
-    pub async fn input(&self, signal: Signal, port: usize) -> Result<usize, Box<dyn Error>> {
-        if let Some(port_core) = self.input_interface.write().await.get_mut(&port) {
-            let mut w_port_core = port_core.write().await;
-            w_port_core.signal_hits += 1;
-            if let SignalHandler::Input(synapse) = &w_port_core.signal_handler {
-                let w_synapse = synapse.read().await;
-                let result = w_synapse
-                    .send(signal)
-                    .map_err(|error| Box::new(error) as Box<dyn Error>);
-
-                if result.is_ok() && self.get_monitoring_mode().await == MonitoringMode::Monitoring
-                {
-                    Self::send_port_status(
-                        self.monitoring_ch.store.clone(),
-                        w_port_core.id.as_str(),
-                        w_port_core.signal_hits,
-                        signal,
-                    )
-                    .await;
-                }
-
-                result
-            } else {
-                Err(Box::new(RnnError::IncorrectPortType))
-            }
-        } else {
-            Err(Box::new(RnnError::PortNotFound(port)))
-        }
-    }
-
-    /// Configuring the input interface of the network in such a way that an unambiguous
-    /// mapping is established between input ports and neuron synapses.
-    pub async fn setup_input(
-        &self,
-        network_port: usize,
-        neuron_id: &str,
-        neuron_port: usize,
-    ) -> Result<(), Box<(dyn Error)>> {
-        use std::collections::btree_map::Entry;
-
-        if let Some(neuron) = self.get_neuron(neuron_id).await {
-            let (tx, rx) = broadcast::channel(CHANNEL_CAPACITY);
-            let src_id = format!("{}I{}", self.get_id(), network_port);
-            neuron
-                .connect(&src_id, None, neuron_port, Arc::new(RwLock::new(rx)))
-                .await?;
-            let mut w_input_interface = self.input_interface.write().await;
-            match w_input_interface.entry(network_port) {
-                Entry::Vacant(entry) => {
-                    entry.insert(Arc::new(RwLock::new(PortCore {
-                        id: src_id.clone(),
-                        signal_hits: 0,
-                        signal_handler: SignalHandler::Input(Arc::new(RwLock::new(tx))),
-                    })));
-                    Ok(())
-                }
-                Entry::Occupied(_) => Err(Box::new(RnnError::PortBusy(src_id))),
-            }
-        } else {
-            Err(Box::new(RnnError::NeuronNotFound(neuron_id.to_string())) as Box<dyn Error>)
-        }
-    }
-
     pub async fn pop_monitoring_store(&self) -> Vec<Status> {
         let mut w_monitoring_store = self.monitoring_ch.store.write().await;
         let snapshot = w_monitoring_store.clone();
@@ -374,7 +313,60 @@ impl NeuralNetwork {
         }
     }
 
-    pub async fn setup_output(
+    pub fn get_id(&self) -> String {
+        self.id.clone()
+    }
+
+    async fn send_port_status(
+        monitoring_store: Arc<RwLock<Vec<Status>>>,
+        port_id: &str,
+        signal_hits: u64,
+        recent_signal: Signal,
+    ) {
+        let mut w_monitoring_store = monitoring_store.write().await;
+        let timestamp = Utc::now();
+        w_monitoring_store.push(Status::Port(PortInfo {
+            timestamp,
+            id: port_id.to_string(),
+            hit_count: signal_hits,
+            recent_signal,
+        }));
+    }
+}
+
+impl Configurable for NeuralNetwork {
+    async fn setup_input(
+        &self,
+        network_port: usize,
+        neuron_id: &str,
+        neuron_port: usize,
+    ) -> Result<(), Box<dyn Error>> {
+        use std::collections::btree_map::Entry;
+
+        if let Some(neuron) = self.get_neuron(neuron_id).await {
+            let (tx, rx) = broadcast::channel(CHANNEL_CAPACITY);
+            let src_id = format!("{}I{}", self.get_id(), network_port);
+            neuron
+                .connect(&src_id, None, neuron_port, Arc::new(RwLock::new(rx)))
+                .await?;
+            let mut w_input_interface = self.input_interface.write().await;
+            match w_input_interface.entry(network_port) {
+                Entry::Vacant(entry) => {
+                    entry.insert(Arc::new(RwLock::new(PortCore {
+                        id: src_id.clone(),
+                        signal_hits: 0,
+                        signal_handler: SignalHandler::Input(Arc::new(RwLock::new(tx))),
+                    })));
+                    Ok(())
+                }
+                Entry::Occupied(_) => Err(Box::new(RnnError::PortBusy(src_id))),
+            }
+        } else {
+            Err(Box::new(RnnError::NeuronNotFound(neuron_id.to_string())) as Box<dyn Error>)
+        }
+    }
+
+    async fn setup_output(
         &self,
         network_port: usize,
         neuron_id: &str,
@@ -417,8 +409,40 @@ impl NeuralNetwork {
             Err(Box::new(RnnError::NeuronNotFound(neuron_id.to_string())))
         }
     }
+}
 
-    pub async fn get_output_receiver(&self, port: usize) -> Option<Arc<RwLock<Receiver<Signal>>>> {
+impl SignalProcessing for NeuralNetwork {
+    async fn input(&self, signal: Signal, port: usize) -> Result<usize, Box<dyn Error>> {
+        if let Some(port_core) = self.input_interface.write().await.get_mut(&port) {
+            let mut w_port_core = port_core.write().await;
+            w_port_core.signal_hits += 1;
+            if let SignalHandler::Input(synapse) = &w_port_core.signal_handler {
+                let w_synapse = synapse.read().await;
+                let result = w_synapse
+                    .send(signal)
+                    .map_err(|error| Box::new(error) as Box<dyn Error>);
+
+                if result.is_ok() && self.get_monitoring_mode().await == MonitoringMode::Monitoring
+                {
+                    Self::send_port_status(
+                        self.monitoring_ch.store.clone(),
+                        w_port_core.id.as_str(),
+                        w_port_core.signal_hits,
+                        signal,
+                    )
+                    .await;
+                }
+
+                result
+            } else {
+                Err(Box::new(RnnError::IncorrectPortType))
+            }
+        } else {
+            Err(Box::new(RnnError::PortNotFound(port)))
+        }
+    }
+
+    async fn get_output_receiver(&self, port: usize) -> Option<Arc<RwLock<Receiver<Signal>>>> {
         if let Some(port_core) = self.output_interface.read().await.get(&port) {
             let r_port_core = port_core.read().await;
             if let SignalHandler::Output(receiver) = &r_port_core.signal_handler {
@@ -430,26 +454,6 @@ impl NeuralNetwork {
             None
         }
     }
-
-    pub fn get_id(&self) -> String {
-        self.id.clone()
-    }
-
-    async fn send_port_status(
-        monitoring_store: Arc<RwLock<Vec<Status>>>,
-        port_id: &str,
-        signal_hits: u64,
-        recent_signal: Signal,
-    ) {
-        let mut w_monitoring_store = monitoring_store.write().await;
-        let timestamp = Utc::now();
-        w_monitoring_store.push(Status::Port(PortInfo {
-            timestamp,
-            id: port_id.to_string(),
-            hit_count: signal_hits,
-            recent_signal,
-        }));
-    }
 }
 
 impl fmt::Display for NeuralNetwork {
@@ -457,6 +461,8 @@ impl fmt::Display for NeuralNetwork {
         write!(f, "The Network {} ", self.id)
     }
 }
+
+// impl Trainer for NeuralNetwork {}
 
 #[cfg(test)]
 mod tests {
