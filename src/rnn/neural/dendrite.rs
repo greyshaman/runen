@@ -2,13 +2,13 @@ use std::sync::Arc;
 
 use tokio::sync::{broadcast::Receiver, RwLock};
 
-use crate::rnn::common::{input_cfg::InputCfg, signal::Signal};
+use crate::rnn::common::{neuron_input_cfg::NeuronInputCfg, signal::Signal};
 
 /// Neuron's input (the dendrite)
 #[derive(Debug)]
 pub struct Dendrite {
     /// Input configuration
-    pub config: InputCfg,
+    pub config: NeuronInputCfg,
 
     /// Synapse capacity
     pub synapse_capacity: Signal,

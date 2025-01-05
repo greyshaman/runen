@@ -1,8 +1,8 @@
 use serde::{Deserialize, Serialize};
 
 use super::{
-    input_cfg::InputCfg,
-    signal::{Signal, Weight},
+    neuron_input_cfg::NeuronInputCfg,
+    signal::Weight,
 };
 
 #[derive(Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -27,7 +27,7 @@ pub enum LinkCfg {
 pub struct NeuronCfg {
     pub id: String,
     pub bias: Weight,
-    pub input_configs: Vec<InputCfg>,
+    pub input_configs: Vec<NeuronInputCfg>,
 }
 
 /// The network config structure used to describe neuron set and connections between them.
@@ -52,26 +52,26 @@ mod tests {
                 id: String::from("M0Z0"),
                 bias: 1,
                 input_configs: vec![
-                    InputCfg::new(2, 2, 1).unwrap(),
-                    InputCfg::new(1, 1, 2).unwrap(),
+                    NeuronInputCfg::new(2, 2, 1).unwrap(),
+                    NeuronInputCfg::new(1, 1, 2).unwrap(),
                 ],
             },
             NeuronCfg {
                 id: String::from("M0Z1"),
                 bias: 1,
-                input_configs: vec![InputCfg::new(1, 1, 1).unwrap()],
+                input_configs: vec![NeuronInputCfg::new(1, 1, 1).unwrap()],
             },
             NeuronCfg {
                 id: String::from("M0Z2"),
                 bias: 1,
-                input_configs: vec![InputCfg::new(3, 2, 1).unwrap()],
+                input_configs: vec![NeuronInputCfg::new(3, 2, 1).unwrap()],
             },
             NeuronCfg {
                 id: String::from("M0Z3"),
                 bias: 1,
                 input_configs: vec![
-                    InputCfg::new(1, 1, 1).unwrap(),
-                    InputCfg::new(3, 1, 2).unwrap(),
+                    NeuronInputCfg::new(1, 1, 1).unwrap(),
+                    NeuronInputCfg::new(3, 1, 2).unwrap(),
                 ],
             },
         ];
@@ -134,14 +134,14 @@ mod tests {
                 id: String::from("M0Z0"),
                 bias: 1,
                 input_configs: vec![
-                    InputCfg::new(3, 2, 1).unwrap(),
-                    InputCfg::new(1, 1, 2).unwrap(),
+                    NeuronInputCfg::new(3, 2, 1).unwrap(),
+                    NeuronInputCfg::new(1, 1, 2).unwrap(),
                 ],
             },
             NeuronCfg {
                 id: String::from("M0Z1"),
                 bias: 1,
-                input_configs: vec![InputCfg::new(1, 1, 1).unwrap()],
+                input_configs: vec![NeuronInputCfg::new(1, 1, 1).unwrap()],
             },
         ];
         let cfg = NetworkCfg {

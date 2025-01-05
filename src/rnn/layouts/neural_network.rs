@@ -16,7 +16,7 @@ use tokio_util::task::TaskTracker;
 
 use crate::rnn::common::command::NeuronCommand;
 use crate::rnn::common::configurable::Configurable;
-use crate::rnn::common::input_cfg::InputCfg;
+use crate::rnn::common::neuron_input_cfg::NeuronInputCfg;
 use crate::rnn::common::network_cfg::NeuronCfg;
 use crate::rnn::common::rnn_error::RnnError;
 use crate::rnn::common::signal::{Signal, Weight};
@@ -194,7 +194,7 @@ impl NeuralNetwork {
         &self,
         network: Arc<NeuralNetwork>,
         bias: Weight,
-        input_configs: Vec<InputCfg>,
+        input_configs: Vec<NeuronInputCfg>,
     ) -> Result<Arc<Neuron>, Box<dyn std::error::Error>> {
         use std::collections::btree_map::Entry;
 
@@ -205,7 +205,7 @@ impl NeuralNetwork {
             self.get_available_neuron_id().await
         );
         let input_configs = if input_configs.is_empty() {
-            vec![InputCfg {
+            vec![NeuronInputCfg {
                 capacity_max: 1,
                 regeneration: 1,
                 weight: 1,

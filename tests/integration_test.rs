@@ -1,7 +1,7 @@
 use std::{sync::Arc, time::Duration};
 
 use librunen::rnn::{
-    common::{configurable::Configurable, input_cfg::InputCfg, signal_processing::SignalProcessing, status::Status},
+    common::{configurable::Configurable, neuron_input_cfg::NeuronInputCfg, signal_processing::SignalProcessing, status::Status},
     layouts::neural_network::NeuralNetwork,
 };
 use tokio::time::sleep;
@@ -11,14 +11,14 @@ async fn test_signal_propagation() {
     let net = Arc::new(NeuralNetwork::new().unwrap());
 
     let var_name = vec![
-        InputCfg::new(2, 2, -1).unwrap(),
-        InputCfg::new(1, 1, 1).unwrap(),
+        NeuronInputCfg::new(2, 2, -1).unwrap(),
+        NeuronInputCfg::new(1, 1, 1).unwrap(),
     ];
     let config1 = var_name;
 
     let config2 = vec![
-        InputCfg::new(1, 1, -2).unwrap(),
-        InputCfg::new(2, 2, 1).unwrap(),
+        NeuronInputCfg::new(1, 1, -2).unwrap(),
+        NeuronInputCfg::new(2, 2, 1).unwrap(),
     ];
 
     let neuron0 = net.create_neuron(net.clone(), 1, vec![]).await.unwrap();

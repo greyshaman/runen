@@ -11,7 +11,7 @@ use super::{reconstructible::Reconstructible, splittable::Splittable};
 /// of a HashMap<Solution, Vec<Fact>>, where the examples are indexed by the solution that
 /// the neural network should receive during the learning process.
 #[derive(Debug, Serialize, Deserialize)]
-pub struct TrainingData<F, S>
+pub struct LearningData<F, S>
 where
     F: Splittable + Eq + Hash,
     S: Reconstructible + Eq + Hash,
@@ -29,13 +29,13 @@ where
     knowledge: HashMap<S, HashSet<F>>,
 }
 
-impl<F, S> TrainingData<F, S>
+impl<F, S> LearningData<F, S>
 where
     F: Splittable + Eq + Hash + Clone,
     S: Reconstructible + Eq + Hash,
 {
     pub fn new(name: &str) -> Self {
-        TrainingData {
+        LearningData {
             name: name.to_string(),
             input_dimension: 1,
             output_dimension: 1,
@@ -194,36 +194,36 @@ mod tests {
     #[test]
     fn new_training_data_should_have_same_name_from_constructor_param() {
         let name = "tester";
-        let data: TrainingData<Byte, DecimalDigits> = TrainingData::new(name);
+        let data: LearningData<Byte, DecimalDigits> = LearningData::new(name);
 
         assert_eq!(data.name, name.to_string());
     }
 
     #[test]
     fn new_training_data_should_have_input_dimension_equal_one() {
-        let data: TrainingData<Byte, DecimalDigits> = TrainingData::new("test");
+        let data: LearningData<Byte, DecimalDigits> = LearningData::new("test");
 
         assert_eq!(data.input_dimension, 1);
     }
 
     #[test]
     fn new_training_data_should_have_output_dimension_equal_one() {
-        let data: TrainingData<Byte, DecimalDigits> = TrainingData::new("test");
+        let data: LearningData<Byte, DecimalDigits> = LearningData::new("test");
 
         assert_eq!(data.output_dimension, 1);
     }
 
     #[test]
     fn new_training_data_should_have_empty_() {
-        let data: TrainingData<Byte, DecimalDigits> = TrainingData::new("test");
+        let data: LearningData<Byte, DecimalDigits> = LearningData::new("test");
 
         assert_eq!(data.knowledge.len(), 0);
     }
 
     #[test]
     fn after_adding_knowledge_dimension_should_change_for_decimal_digits() {
-        let mut data: TrainingData<Byte, DecimalDigits> =
-            TrainingData::new("Binary2DecimalConverter");
+        let mut data: LearningData<Byte, DecimalDigits> =
+            LearningData::new("Binary2DecimalConverter");
 
         data.add_knowledge(&[Byte(0)], DecimalDigits(0));
         assert_eq!(data.input_dimension, 1);
@@ -248,8 +248,8 @@ mod tests {
 
     #[test]
     fn after_adding_knowledge_dimension_should_change_for_decimal_solutions() {
-        let mut data: TrainingData<Byte, DecimalSolutions> =
-            TrainingData::new("Binary2DecimalSolutionConverter");
+        let mut data: LearningData<Byte, DecimalSolutions> =
+            LearningData::new("Binary2DecimalSolutionConverter");
 
         data.add_knowledge(&[Byte(0)], DecimalSolutions::Zero)
             .add_knowledge(&[Byte(0b0000_0001)], DecimalSolutions::One)

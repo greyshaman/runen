@@ -22,7 +22,7 @@ use tokio_util::task::TaskTracker;
 
 use super::dendrite::Dendrite;
 use crate::rnn::common::command::NeuronCommand;
-use crate::rnn::common::input_cfg::InputCfg;
+use crate::rnn::common::neuron_input_cfg::NeuronInputCfg;
 use crate::rnn::common::network_cfg::NeuronCfg;
 use crate::rnn::common::rnn_error::RnnError;
 use crate::rnn::common::signal::Signal;
@@ -201,14 +201,14 @@ impl Neuron {
     }
 
     /// Config new neuron
-    pub async fn config(&self, settings: Vec<InputCfg>) {
+    pub async fn config(&self, settings: Vec<NeuronInputCfg>) {
         let mut w_core = self.core.write().await;
         w_core.dendrites.clear();
         w_core.input_hits.clear();
         w_core.accumulator = 1;
         for (port, input_cfg) in settings.iter().enumerate() {
             let dendrite = Dendrite {
-                config: InputCfg {
+                config: NeuronInputCfg {
                     capacity_max: input_cfg.capacity_max,
                     regeneration: input_cfg.regeneration,
                     weight: input_cfg.weight,
@@ -228,7 +228,7 @@ impl Neuron {
             .dendrites
             .iter()
             .map(|(_idx, dendrite)| dendrite.config.clone())
-            .collect::<Vec<InputCfg>>();
+            .collect::<Vec<NeuronInputCfg>>();
 
         NeuronCfg {
             id: self.get_id(),
@@ -656,12 +656,12 @@ mod tests {
 
             neuron
                 .config(vec![
-                    InputCfg {
+                    NeuronInputCfg {
                         capacity_max: 1,
                         regeneration: 1,
                         weight: 1,
                     },
-                    InputCfg {
+                    NeuronInputCfg {
                         capacity_max: 2,
                         regeneration: 1,
                         weight: 2,

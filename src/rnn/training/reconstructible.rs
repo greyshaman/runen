@@ -11,10 +11,7 @@ use crate::rnn::common::signal::Signal;
 /// the value of solution/output or None if there is no unambiguous answer.
 /// The result can also have a direct value equal to the value of the single output port.
 /// This should be determined by the implementation of Reconstructible.
-pub trait Reconstructible<T = Signal>
-where
-    Self: Sized,
-{
+pub trait Reconstructible<T = Signal>: Sized {
     fn reconstruct(raw_data: Vec<T>) -> Option<Self>;
     fn dimension(&self) -> usize;
 }

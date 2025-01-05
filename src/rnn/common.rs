@@ -8,5 +8,5 @@ pub mod signal_processing;
 pub mod spec_type;
 
 pub mod command;
-pub mod input_cfg;
+pub mod neuron_input_cfg;
 pub mod network_cfg;

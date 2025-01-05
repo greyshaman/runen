@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use librunen::rnn::common::configurable::Configurable;
-use librunen::rnn::common::input_cfg::InputCfg;
+use librunen::rnn::common::neuron_input_cfg::NeuronInputCfg;
 use librunen::rnn::common::signal_processing::SignalProcessing;
 use librunen::rnn::layouts::neural_network::NeuralNetwork;
 use tokio::task;
@@ -22,8 +22,8 @@ async fn generate_net(net: Arc<NeuralNetwork>) {
             net.clone(),
             1,
             vec![
-                InputCfg::new(2, 2, -1).unwrap(),
-                InputCfg::new(1, 1, 1).unwrap(),
+                NeuronInputCfg::new(2, 2, -1).unwrap(),
+                NeuronInputCfg::new(1, 1, 1).unwrap(),
             ],
         )
         .await
@@ -35,8 +35,8 @@ async fn generate_net(net: Arc<NeuralNetwork>) {
             net.clone(),
             1,
             vec![
-                InputCfg::new(1, 1, -2).unwrap(),
-                InputCfg::new(2, 2, 1).unwrap(),
+                NeuronInputCfg::new(1, 1, -2).unwrap(),
+                NeuronInputCfg::new(2, 2, 1).unwrap(),
             ],
         )
         .await

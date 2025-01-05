@@ -89,9 +89,9 @@ let net = Network::new().unwrap();
 
 Сеть имеет асинхронный метод для создания и добавления в свой состав нейронов, которая возвращает результат со ссылкой на созданный нейрон или ошибку если она возникла:
 
-`async fn Network::create_neuron(&self, net: Arc<Network>, input_cfg: Vec<InputCfg>) -> Result<Arc<Neuron>, Box<dyn Error>>`
+`async fn Network::create_neuron(&self, net: Arc<Network>, input_cfg: Vec<NeuronInputCfg>) -> Result<Arc<Neuron>, Box<dyn Error>>`
 
-При создании нейрону необходимо предоставить ссылку на сеть к которой он будет принадлежать и конфигурацию его входного интерфейса в виде вектора `Vec<InputCfg>`.
+При создании нейрону необходимо предоставить ссылку на сеть к которой он будет принадлежать и конфигурацию его входного интерфейса в виде вектора `Vec<NeuronInputCfg>`.
 Если передать пустой вектор, то создастся нейрон с одним входом (синапс с ёмкостью = 1 и регенерацией на 1, и дендрит с весом равным 1).
 
 ```rust
@@ -108,9 +108,9 @@ let neuron = net.create_neuron(net.clone(), 1, neuron_input_cfg)
 .... create net instance ....
 
 let neuron_input_cfg = vec![
-  InputCfg::new(1, 1, -1).unwrap(),
-  InputCfg::new(2, 2, 1).unwrap(),
-  InputCfg::new(1, 1, 1).unwrap()
+  NeuronInputCfg::new(1, 1, -1).unwrap(),
+  NeuronInputCfg::new(2, 2, 1).unwrap(),
+  NeuronInputCfg::new(1, 1, 1).unwrap()
 ];
 let neuron = net.create_neuron(net.clone(), 1, neuron_input_cfg)
   .await
@@ -134,8 +134,8 @@ let neuron_1 = net.create_neuron(net.clone(), 1, vec![]).await.unwrap();
 let src_id = neuron_1.get_id();
 
 let neuron_2 = net.create_neuron(net.clone(), 1, vec![
-  InputCfg::new(1, 1, 1).unwrap(),
-  InputCfg::new(2, 1, -1).unwrap()
+  NeuronInputCfg::new(1, 1, 1).unwrap(),
+  NeuronInputCfg::new(2, 1, -1).unwrap()
 ])
   .await
   .unwrap();
@@ -156,8 +156,8 @@ assert!(net.connect_neurons(&src_id, &dst_id, 1).await.is_ok());
 let net = Arc::new(Network::new().unwrap());
 
 let neuron = net.create_neuron(net.clone(), 1, vec![
-  InputCfg::new(1, 1, 1).unwrap(),
-  InputCfg::new(2, 1, -1).unwrap()
+  NeuronInputCfg::new(1, 1, 1).unwrap(),
+  NeuronInputCfg::new(2, 1, -1).unwrap()
 ])
   .await
   .unwrap();
@@ -214,7 +214,7 @@ let jh0 = tokio::task::spawn(async move{
 - [x] ~~Сделать асинхронную реализацию модели~~
 - [x] ~~Добавить юнит тесты.~~
 - [x] ~~Добавить интеграционные тесты.~~
-- [ ] Улучшить взаимодействие с интерфейсами нейросети.
+- [x] ~~Улучшить взаимодействие с интерфейсами нейросети.~~
 - [ ] Добавить бенчмарки и профилировать код.
 - [x] ~~Добавить чтение/запись конфигурации: использовать serde.~~
 - [ ] Реализовать обучение сети.
@@ -281,9 +281,9 @@ let net = Network::new().unwrap();
 
 The network has an asynchronous method for creating and adding neurons to its composition, which returns a result with a link to the created neuron or an error if it occurred:
 
-`async fn Network::create_neuron(&self, net: Arc<Network>, input_cfg: Vec<InputCfg>) -> Result<Arc<Neuron>, Box<dyn Error>>`
+`async fn Network::create_neuron(&self, net: Arc<Network>, input_cfg: Vec<NeuronInputCfg>) -> Result<Arc<Neuron>, Box<dyn Error>>`
 
-When creating a neuron, it is necessary to provide a link to the network to which it will belong and the configuration of its input interface in the form of the vector `Vec<InputCfg>`.
+When creating a neuron, it is necessary to provide a link to the network to which it will belong and the configuration of its input interface in the form of the vector `Vec<NeuronInputCfg>`.
 If you pass an empty vector, a neuron with one input will be created (a synapse with capacity = 1 and regeneration by 1, and a dendrite with weight equal to 1).
 
 ```rust
@@ -300,9 +300,9 @@ In the case when you need to specify several inputs at once, you can do this:
 .... create net instance ....
 
 let neuron_input_cfg = vec![
-  InputCfg::new(1, 1, -1).unwrap(),
-  InputCfg::new(2, 2, 1).unwrap(),
-  InputCfg::new(1, 1, 1).unwrap()
+  NeuronInputCfg::new(1, 1, -1).unwrap(),
+  NeuronInputCfg::new(2, 2, 1).unwrap(),
+  NeuronInputCfg::new(1, 1, 1).unwrap()
 ];
 let neuron = net.create_neuron(net.clone(), 1, neuron_input_cfg)
   .await
@@ -326,8 +326,8 @@ let neuron_1 = net.create_neuron(net.clone(), 1, vec![]).await.unwrap();
 let src_id = neuron_1.get_id();
 
 let neuron_2 = net.create_neuron(net.clone(), 1, vec![
-  InputCfg::new(1, 1, 1).unwrap(),
-  InputCfg::new(2, 1, -1).unwrap()
+  NeuronInputCfg::new(1, 1, 1).unwrap(),
+  NeuronInputCfg::new(2, 1, -1).unwrap()
 ])
   .await
   .unwrap();
@@ -348,8 +348,8 @@ Here `network_port` is the number of the input port, `neuron_id` is the identifi
 let net = Arc::new(Network::new().unwrap());
 
 let neuron = net.create_neuron(net.clone(), 1, vec![
-  InputCfg::new(1, 1, 1).unwrap(),
-  InputCfg::new(2, 1, -1).unwrap()
+  NeuronInputCfg::new(1, 1, 1).unwrap(),
+  NeuronInputCfg::new(2, 1, -1).unwrap()
 ])
   .await
   .unwrap();
@@ -406,7 +406,7 @@ In this fragment, the axon of one of the neurons is assigned as the first output
 - [x] ~~To make an asynchronous implementation of the model~~
 - [x] ~~Add unit tests.~~
 - [x] ~~Add integration tests.~~
-- [ ] Improve interaction with neural network interfaces.
+- [x] ~~Improve interaction with neural network interfaces.~~
 - [ ] Add benchmarks and profile the code.
 - [x] ~~Add read/write configuration: use serde.~~
 - [ ] Implement network training.
