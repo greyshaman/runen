@@ -40,7 +40,7 @@ where
 #[macro_export]
 macro_rules! rcsa_input_cfg {
     ($capacity_max:expr, $regeneration:expr, $weight:expr) => {
-        InputCfg::new($capacity_max, $regeneration, $weight)
+        RcsaInputCfg::new($capacity_max, $regeneration, $weight)
     };
 }
 
