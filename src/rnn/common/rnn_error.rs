@@ -44,6 +44,12 @@ pub enum RnnError {
 
     /// When attempt to send neuron status but channel is full.
     MonitoringChannelFull(String),
+
+    /// When config parser cannot parse config
+    BadConfig,
+
+    /// When try send signal but not have connection
+    SendingWithoutConnection,
 }
 
 impl std::fmt::Display for RnnError {
