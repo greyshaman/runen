@@ -1,1 +1,1 @@
-pub mod input_cfg;
+pub mod rcsa_input_cfg;
