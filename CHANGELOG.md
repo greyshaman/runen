@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 
+## [0.4.0]
+
+### Added
+
+- Added Processors: Stdp, Svtdp and RCSA. They are implementing different signal processing logic.
+- Signal has customized data type and creation time.
+- Added layers (input, hidden, output).
+- Added input and output ports.
+- Added synapse trait.
+- Added new error types into RnnError: BadConfig, SendingWithoutConnection.
+
+### Changed
+
+- Changed neuron structure: moved out signal processing logic to Processors entities
+- Changed neural network structure
+- Changed status to use new signal structure.
+
+### Removed
+
+- The outdated signal_handlers has been removed.
+- The outdated input port configuration has been removed.
+- The outdated dendrite has been removed.
+
 ## [0.2.0]
 
 ### Added
