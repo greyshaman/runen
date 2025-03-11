@@ -9,7 +9,6 @@ pub mod neuron_cfg;
 
 pub mod rnn_error;
 
-pub mod context;
 pub mod status;
 pub mod utils;
 
