@@ -1,4 +1,10 @@
-use std::{error::Error, sync::{atomic::{AtomicUsize, Ordering}, Arc}};
+use std::{
+    error::Error,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+};
 
 use tokio::sync::broadcast;
 
