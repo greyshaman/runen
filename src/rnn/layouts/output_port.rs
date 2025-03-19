@@ -1,4 +1,12 @@
-use std::{error::Error, pin::Pin, sync::{atomic::{AtomicUsize, Ordering}, Arc}, task::Poll};
+use std::{
+    error::Error,
+    pin::Pin,
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+    task::Poll,
+};
 
 use tokio::sync::broadcast;
 use tokio_stream::Stream;
@@ -228,8 +236,8 @@ where
 
 #[cfg(test)]
 mod tests {
-    use tokio_stream::StreamExt;
     use tokio::sync::Mutex;
+    use tokio_stream::StreamExt;
 
     use super::*;
 
@@ -312,7 +320,6 @@ mod tests {
         let (result,) = tokio::join!(handler_result);
 
         assert!(result.is_ok());
-
 
         let g_port = port_cloned.lock().await;
         assert_eq!(g_port.signal_hits_count(), 2);
