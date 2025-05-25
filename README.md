@@ -1,4 +1,4 @@
-# RuNeN - (Rust Neural Network)
+# RuNeN - (Rust Neuromorphic Network)
 
 <center><img src="https://github.com/greyshaman/runen/raw/refs/heads/dev/images/neuro_mech_3d_l.webp" width="50%" alt="Runen Logo"></center>
 
